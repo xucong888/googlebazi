@@ -1,0 +1,5 @@
+{
+  "name": "悬壶承光",
+  "description": "Multi-system fate analysis platform (Bazi, Ziwei, Western Astrology, MBTI) with AI-powered unified interpretation and history tracking.",
+  "requestFramePermissions": ["geolocation"]
+}

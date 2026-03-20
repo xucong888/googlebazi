@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: history
+    // Document ID: auto-generated
+    // Fields:
+    //   - uid: string (required, immutable) - The user ID of the owner
+    //   - name: string (required) - The name of the user
+    //   - birthInfo: map (required) - The birth information
+    //   - fateData: map (required) - The calculated fate data
+    //   - createdAt: timestamp (required, immutable) - Creation time
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "a878071684@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidHistoryRecord(data) {
+      return data.keys().hasOnly(['uid', 'name', 'birthInfo', 'fateData', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.birthInfo is map &&
+             data.fateData is map &&
+             data.createdAt is timestamp;
+    }
+
+    match /history/{recordId} {
+      allow read: if isOwner(resource.data.uid);
+      allow create: if isAuthenticated() && 
+                      isValidHistoryRecord(request.resource.data) && 
+                      request.resource.data.uid == request.auth.uid;
+      allow update: if false; // History records should be immutable
+      allow delete: if isOwner(resource.data.uid);
+    }
+    
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+  }
+}

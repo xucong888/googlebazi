@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "HistoryRecord": {
+      "title": "History Record",
+      "description": "A record of a user's fate calculation history.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user ID of the owner."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the user for this record."
+        },
+        "birthInfo": {
+          "type": "object",
+          "description": "The birth information used for calculation."
+        },
+        "fateData": {
+          "type": "object",
+          "description": "The calculated fate data."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the record was created."
+        }
+      },
+      "required": ["uid", "name", "birthInfo", "fateData", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/history/{recordId}": {
+      "schema": "HistoryRecord",
+      "description": "Collection of fate calculation history records."
+    }
+  }
+}

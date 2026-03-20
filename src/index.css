@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
+  
+  --color-paper-50: #fcfaf7;
+  --color-paper-100: #f5f2ed;
+  --color-paper-200: #e8e4dc;
+  --color-ink-900: #1a1a1a;
+  --color-ink-700: #4a4a4a;
+  --color-ink-500: #7a7a7a;
+  --color-accent-muted: #a6937c; /* Muted gold/bronze */
+  --color-accent-sage: #8e9481;  /* Muted sage */
+}
+
+@layer base {
+  body {
+    @apply bg-paper-50 text-ink-900 antialiased selection:bg-accent-muted/20;
+    font-feature-settings: "ss01", "ss02", "cv01", "cv11";
+  }
+}
+
+.luxury-card {
+  @apply bg-white border border-paper-200 rounded-sm shadow-[0_4px_20px_rgba(0,0,0,0.02)];
+}
+
+.fine-line {
+  @apply border-paper-200;
+}
+
+.text-serif {
+  @apply font-serif italic;
+}
+
+.btn-primary {
+  @apply bg-ink-900 text-paper-50 px-8 py-3 rounded-sm hover:bg-ink-700 transition-all duration-300 font-medium tracking-wide uppercase text-xs;
+}
+
+.btn-secondary {
+  @apply border border-ink-900 text-ink-900 px-8 py-3 rounded-sm hover:bg-paper-100 transition-all duration-300 font-medium tracking-wide uppercase text-xs;
+}
+
+/* Markdown Content Styling */
+.markdown-content {
+  @apply font-serif text-lg leading-relaxed text-ink-700;
+}
+
+.markdown-content h1, .markdown-content h2, .markdown-content h3 {
+  @apply font-serif italic text-ink-900 mt-8 mb-4;
+}
+
+.markdown-content h1 { @apply text-3xl; }
+.markdown-content h2 { @apply text-2xl border-b border-paper-200 pb-2; }
+.markdown-content h3 { @apply text-xl; }
+
+.markdown-content p {
+  @apply mb-6;
+}
+
+.markdown-content ul, .markdown-content ol {
+  @apply mb-6 ml-6;
+}
+
+.markdown-content li {
+  @apply mb-2 list-disc;
+}
+
+.markdown-content strong {
+  @apply text-ink-900 font-medium;
+}
+
+.markdown-content blockquote {
+  @apply border-l-4 border-accent-muted pl-6 italic text-ink-500 my-8;
+}
+
+.markdown-content hr {
+  @apply border-paper-200 my-12;
+}
