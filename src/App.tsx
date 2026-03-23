@@ -133,7 +133,7 @@ export default function App() {
   const [selectedPalace, setSelectedPalace] = useState<number | null>(null);
   
   const [birthInfo, setBirthInfo] = useState({
-    name: '徐聪',
+    name: '张三',
     gender: 'male' as 'male' | 'female',
     calendarType: 'solar' as 'solar' | 'lunar',
     isLeap: false,
