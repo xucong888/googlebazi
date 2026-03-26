@@ -603,12 +603,14 @@ export default function App() {
               className="max-w-2xl mx-auto space-y-16"
             >
               {/* Header */}
-              <div className="text-center space-y-4">
-                <h2 className="text-5xl font-serif leading-tight">
-                  探寻生命之<span className="italic">静谧</span>
+              <div className="text-center space-y-6">
+                <h2 className="text-4xl md:text-5xl font-serif leading-[1.2]">
+                  探寻生命之<br className="md:hidden" />
+                  <span className="italic">静谧</span>
                 </h2>
-                <p className="text-ink-500 font-light tracking-wide max-w-md mx-auto text-sm">
-                  输入您的生辰信息，开启一场跨越东西方智慧的深度对话。
+                <div className="w-12 h-[1px] bg-ink-900/20 mx-auto" />
+                <p className="text-ink-500 font-light tracking-wide max-w-sm mx-auto text-xs md:text-sm leading-relaxed">
+                  输入您的生辰信息，<br className="md:hidden" />开启一场跨越东西方智慧的深度对话。
                 </p>
               </div>
 
@@ -1001,17 +1003,26 @@ export default function App() {
                     </div>
                     <div className="flex justify-between items-center border-b border-paper-100 pb-3">
                       <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">公历 / SOLAR</span>
-                      <span className="font-medium text-ink-900">{getSolarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap)} {birthInfo.hour}:{birthInfo.minute}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-ink-900">{getSolarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap)} {birthInfo.hour}:{birthInfo.minute}</span>
+                        <button className="text-[10px] text-gold-600 hover:text-gold-700">编辑</button>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center border-b border-paper-100 pb-3">
                       <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">农历 / LUNAR</span>
-                      <span className="font-medium text-ink-900">{getLunarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-ink-900">{getLunarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap)}</span>
+                        <button className="text-[10px] text-gold-600 hover:text-gold-700">编辑</button>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center border-b border-paper-100 pb-3">
                       <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">出生地点 / LOCATION</span>
-                      <span className="font-medium text-ink-900 uppercase">
-                        {getCountryName(birthInfo.country)} {getProvinceName(birthInfo.country, birthInfo.province, birthInfo.province)} {getCityName(birthInfo.country, birthInfo.city)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-ink-900 uppercase">
+                          {getCountryName(birthInfo.country)} {getProvinceName(birthInfo.country, birthInfo.province, birthInfo.province)} {getCityName(birthInfo.country, birthInfo.city)}
+                        </span>
+                        <button className="text-[10px] text-gold-600 hover:text-gold-700">编辑</button>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center border-b border-paper-100 pb-3">
                       <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">生肖属相 / ZODIAC</span>
@@ -1183,25 +1194,27 @@ export default function App() {
                           </table>
                         </div>
 
-                        {/* BaZi Vertical Stack (Mobile) */}
-                        <div className="md:hidden space-y-4">
+                        {/* BaZi Grid (Mobile) */}
+                        <div className="md:hidden grid grid-cols-2 gap-3">
                           {[
                             { title: '年柱', pillar: fateData.bazi.pillars.year },
                             { title: '月柱', pillar: fateData.bazi.pillars.month },
                             { title: '日柱', pillar: fateData.bazi.pillars.day },
                             { title: '时柱', pillar: fateData.bazi.pillars.hour },
                           ].map((item, i) => (
-                            <div key={i} className="bg-white border border-paper-200 rounded-xl p-4 grid grid-cols-2 gap-4">
-                              <div className="col-span-2 text-[10px] font-bold text-ink-400 uppercase tracking-widest border-b border-paper-100 pb-2">{item.title}</div>
-                              <div className="text-center">
-                                <p className="text-[10px] text-ink-400">天干</p>
-                                <p className={cn("text-2xl font-serif", getElementColor(item.pillar.gan))}>{item.pillar.gan}</p>
+                            <div key={i} className="bg-white border border-paper-200 rounded-xl p-3 flex flex-col items-center gap-2">
+                              <div className="text-[10px] font-bold text-ink-400 uppercase tracking-widest border-b border-paper-100 w-full text-center pb-1">{item.title}</div>
+                              <div className="flex gap-4">
+                                <div className="text-center">
+                                  <p className="text-[9px] text-ink-400">天干</p>
+                                  <p className={cn("text-xl font-serif", getElementColor(item.pillar.gan))}>{item.pillar.gan}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[9px] text-ink-400">地支</p>
+                                  <p className={cn("text-xl font-serif", getElementColor(item.pillar.zhi))}>{item.pillar.zhi}</p>
+                                </div>
                               </div>
-                              <div className="text-center">
-                                <p className="text-[10px] text-ink-400">地支</p>
-                                <p className={cn("text-2xl font-serif", getElementColor(item.pillar.zhi))}>{item.pillar.zhi}</p>
-                              </div>
-                              <div className="col-span-2 text-xs text-ink-600">十神: {item.pillar.tenGod} | 纳音: {item.pillar.naYin}</div>
+                              <div className="text-[9px] text-ink-500 w-full text-center border-t border-paper-100 pt-1">{item.pillar.tenGod} · {item.pillar.naYin}</div>
                             </div>
                           ))}
                         </div>
@@ -1689,17 +1702,17 @@ export default function App() {
                       whileTap={{ scale: 0.95 }}
                       onClick={unlockAiInterpretation}
                       disabled={isUnlockingAi || points < (aiDepth === 'deep' ? 50 : 10)}
-                      className="w-full group relative bg-gold-500 hover:bg-gold-600 text-white px-12 py-4 rounded-full font-medium transition-all shadow-lg shadow-gold-200/50 flex items-center justify-center gap-3 overflow-hidden"
+                      className="w-full group relative bg-violet-800 hover:bg-violet-900 text-white px-12 py-4 rounded-full font-semibold tracking-wide transition-all shadow-lg shadow-violet-800/30 flex items-center justify-center gap-3 overflow-hidden"
                     >
                       {isUnlockingAi ? (
-                        <div className="flex items-center gap-3 z-10">
+                        <div className="relative flex items-center gap-3 z-20">
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>正在深度测算中... {Math.round(aiProgress)}%</span>
+                          <span className="font-semibold tracking-wide">正在深度测算中... {Math.round(aiProgress)}%</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3 z-10">
+                        <div className="relative flex items-center gap-3 z-20">
                           <Sparkles className="w-5 h-5 group-hover:animate-pulse" />
-                          <span>立马进行{aiDepth === 'deep' ? '深度' : '快速'}测算 ({aiDepth === 'deep' ? '50' : '10'}积分)</span>
+                          <span className="text-white font-semibold tracking-wide">立马开启测算 ({aiDepth === 'deep' ? '50' : '10'}积分)</span>
                         </div>
                       )}
                       
@@ -1708,7 +1721,7 @@ export default function App() {
                         <motion.div 
                           initial={{ width: 0 }}
                           animate={{ width: `${aiProgress}%` }}
-                          className="absolute inset-0 bg-gold-600/50 z-0"
+                          className="absolute inset-0 bg-violet-900/50 z-0"
                         />
                       )}
                     </motion.button>
@@ -1719,7 +1732,7 @@ export default function App() {
                           <motion.div 
                             initial={{ width: 0 }}
                             animate={{ width: `${aiProgress}%` }}
-                            className="h-full bg-gold-500"
+                            className="h-full bg-violet-800"
                           />
                         </div>
                         <p className="text-[10px] text-ink-400 italic">AI大师正在观星盘、查典籍，请稍候...</p>
@@ -1736,7 +1749,7 @@ export default function App() {
                       )}
                     >
                       <Sparkles className={cn("w-3 h-3", aiDepth === 'quick' ? "text-gold-500" : "text-ink-300")} />
-                      快速
+                      快速测算
                     </button>
                     <button 
                       onClick={() => setAiDepth('deep')}
@@ -1746,7 +1759,7 @@ export default function App() {
                       )}
                     >
                       <Clock className={cn("w-3 h-3", aiDepth === 'deep' ? "text-gold-500" : "text-ink-300")} />
-                      深度
+                      深度测算
                     </button>
                   </div>
 
