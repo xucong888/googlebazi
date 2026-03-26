@@ -9,12 +9,12 @@ if (!apiKey || !baseURL || !modelId) {
 }
 
 const openai = new OpenAI({
-  apiKey: apiKey || "placeholder", // Prevent SDK error if missing, will fail on API call
+  apiKey: apiKey, // Removed '|| "placeholder"' to fail fast if key is missing
   baseURL: baseURL,
-  dangerouslyAllowBrowser: true, // Required because we are calling from the frontend
+  dangerouslyAllowBrowser: true,
 });
 
-const MODEL_ID = modelId || "placeholder";
+const MODEL_ID = modelId; // Removed '|| "placeholder"'
 
 export async function getUnifiedInterpretation(birthInfo: any, fateData: any, depth: 'quick' | 'deep' = 'quick') {
   const systemInstruction = `
