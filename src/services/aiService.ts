@@ -1,6 +1,20 @@
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const apiKey = import.meta.env.VITE_VOLC_API_KEY;
+const baseURL = import.meta.env.VITE_VOLC_API_ENDPOINT;
+const modelId = import.meta.env.VITE_VOLC_MODEL_ID;
+
+if (!apiKey || !baseURL || !modelId) {
+  console.error("Volcano Engine API configuration is missing. Please check your environment variables.");
+}
+
+const openai = new OpenAI({
+  apiKey: apiKey || "placeholder", // Prevent SDK error if missing, will fail on API call
+  baseURL: baseURL,
+  dangerouslyAllowBrowser: true, // Required because we are calling from the frontend
+});
+
+const MODEL_ID = modelId || "placeholder";
 
 export async function getUnifiedInterpretation(birthInfo: any, fateData: any, depth: 'quick' | 'deep' = 'quick') {
   const systemInstruction = `
@@ -85,11 +99,11 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
+    const response = await openai.chat.completions.create({
+      model: MODEL_ID,
+      messages: [{ role: "user", content: prompt }],
     });
-    return response.text;
+    return response.choices[0].message.content;
   } catch (error: any) {
     console.error("AI Interpretation Error:", error?.message || String(error));
     return "抱歉，AI 解读暂时无法生成。请稍后再试。";
@@ -139,19 +153,20 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
   `;
 
   try {
-    const chat = ai.chats.create({
-      model: "gemini-3-flash-preview",
-      config: {
-        systemInstruction,
-      },
-      history: history.map(m => ({
-        role: m.role,
-        parts: [{ text: m.text }]
-      }))
-    });
+    const messages = [
+      { role: "system", content: systemInstruction },
+      ...history.map(m => ({
+        role: m.role === 'model' ? 'assistant' : 'user',
+        content: m.text
+      })),
+      { role: "user", content: message }
+    ];
 
-    const response = await chat.sendMessage({ message });
-    return response.text;
+    const response = await openai.chat.completions.create({
+      model: MODEL_ID,
+      messages: messages as any,
+    });
+    return response.choices[0].message.content;
   } catch (error: any) {
     console.error("AI Chat Error:", error?.message || String(error));
     return "抱歉，大师现在有点忙，请稍后再问。";

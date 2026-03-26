@@ -27,10 +27,7 @@ import {
   ArrowRight,
   Plus,
   Globe,
-  User,
-  Copy,
-  ClipboardCheck,
-  Briefcase
+  User
 } from 'lucide-react';
 import { 
   calculateBazi, 
@@ -40,17 +37,16 @@ import {
   calculateWesternAstrology,
   calculateLifeNumerology,
   BaziData,
-  ZiweiData,
-  LifeNumerologyData
+  ZiweiData
 } from './services/fateEngine';
 import { Lunar, Solar, LunarYear } from 'lunar-javascript';
 import { getUnifiedInterpretation, chatWithMaster } from './services/aiService';
-import { auth, loginWithGoogle, logout, saveFateRecord, getHistory, deleteFateRecord, updateFateRecord } from './firebase';
+import { auth, loginWithGoogle, logout, saveFateRecord, getHistory } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import ReactMarkdown from 'react-markdown';
-import { SYSTEMS, YEARS, MBTI_DESCRIPTIONS, NUMEROLOGY_DESCRIPTIONS } from './constants/fateData';
+import { SYSTEMS, YEARS } from './constants/fateData';
 import { Country, State, City } from 'country-state-city';
 
 function cn(...inputs: ClassValue[]) {
@@ -133,7 +129,7 @@ export default function App() {
   const [selectedPalace, setSelectedPalace] = useState<number | null>(null);
   
   const [birthInfo, setBirthInfo] = useState({
-    name: '张三',
+    name: '徐聪',
     gender: 'male' as 'male' | 'female',
     calendarType: 'solar' as 'solar' | 'lunar',
     isLeap: false,
@@ -214,7 +210,6 @@ export default function App() {
     ziwei: ZiweiData | null;
     western: any | null;
     mbti: any | null;
-    lifeNumerology: LifeNumerologyData | null;
     zodiac: string;
     westernZodiac: string;
   }>({
@@ -222,14 +217,10 @@ export default function App() {
     ziwei: null,
     western: null,
     mbti: null,
-    lifeNumerology: null,
     zodiac: '',
     westernZodiac: '',
   });
   const [aiReport, setAiReport] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState<string | null>(null);
-  const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isSendingChat, setIsSendingChat] = useState(false);
@@ -453,13 +444,12 @@ export default function App() {
 
     if (saveToHistory && user) {
       try {
-        const docRef = await saveFateRecord({
+        await saveFateRecord({
           uid: user.uid,
           name: birthInfo.name,
           birthInfo,
           fateData: data
         });
-        if (docRef) setCurrentRecordId(docRef.id);
         loadHistory(user.uid);
       } catch (err) {
         console.error('Failed to save history:', err);
@@ -494,11 +484,6 @@ export default function App() {
       const report = await getUnifiedInterpretation(birthInfo, fateData, aiDepth);
       setAiReport(report);
       setAiProgress(100);
-      
-      if (currentRecordId) {
-        await updateFateRecord(currentRecordId, { aiReport: report });
-        if (user) loadHistory(user.uid);
-      }
     } finally {
       clearInterval(progressInterval);
       setTimeout(() => {
@@ -508,25 +493,6 @@ export default function App() {
     }
   };
 
-  const loadRecord = (record: any) => {
-    setBirthInfo(record.birthInfo);
-    setFateData(record.fateData);
-    setAiReport(record.aiReport || null);
-    setCurrentRecordId(record.id);
-    setStep('dashboard');
-    setShowHistory(false);
-    setActiveTab('bazi');
-  };
-
-  const handleDeleteRecord = async (id: string) => {
-    if (!user) return;
-    try {
-      await deleteFateRecord(id);
-      loadHistory(user.uid);
-    } catch (err) {
-      console.error('Failed to delete record:', err);
-    }
-  };
   const handleChat = async () => {
     if (!chatInput.trim() || isSendingChat) return;
     
@@ -595,13 +561,6 @@ export default function App() {
               </div>
               {isLoggedIn && user ? (
                 <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setShowHistory(true)}
-                    className="p-2 rounded-full hover:bg-paper-50 text-ink-400 transition-colors"
-                    title="历史记录"
-                  >
-                    <History size={20} />
-                  </button>
                   <div className="text-right hidden sm:block">
                     <p className="text-[10px] font-bold text-ink-900">{user.displayName}</p>
                     <button 
@@ -633,7 +592,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-8 py-16">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-16">
         <AnimatePresence mode="wait">
           {step === 'input' ? (
             <motion.div 
@@ -659,7 +618,7 @@ export default function App() {
                   <div className="w-6 h-6 rounded-full bg-ink-900 text-paper-50 flex items-center justify-center text-[10px] font-bold">01</div>
                   <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-ink-900">选择测算体系 / SYSTEMS</h3>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   {SYSTEMS.map(system => (
                     <button
                       key={system.id}
@@ -724,7 +683,7 @@ export default function App() {
 
                 <div className="space-y-12">
                   {/* Birth Details Integrated */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">年份 / YEAR</label>
                       <select 
@@ -1031,18 +990,9 @@ export default function App() {
               {/* Summary Section */}
               <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-1 bg-white/50 backdrop-blur-sm border border-paper-200 rounded-3xl p-8 space-y-8">
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-2">
-                      <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold">PROFILE</p>
-                      <h2 className="text-3xl font-serif text-ink-900 leading-tight">{birthInfo.name}八字排盘</h2>
-                    </div>
-                    <button 
-                      onClick={() => setStep('input')}
-                      className="text-[10px] uppercase tracking-widest text-gold-600 hover:text-gold-700 transition-colors font-bold flex items-center gap-1.5 py-1 px-3 rounded-full border border-gold-100 hover:border-gold-300 bg-gold-50/30"
-                    >
-                      <Plus size={12} />
-                      修改资料 / EDIT
-                    </button>
+                  <div className="space-y-2">
+                    <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold">PROFILE</p>
+                    <h2 className="text-3xl font-serif text-ink-900 leading-tight">{birthInfo.name}八字排盘</h2>
                   </div>
                   <div className="space-y-6 text-sm font-light text-ink-700">
                     <div className="flex justify-between items-center border-b border-paper-100 pb-3">
@@ -1188,104 +1138,73 @@ export default function App() {
                         </div>
                         <div className="h-[1px] w-full bg-paper-100" />
                         
-                        {/* BaZi Table */}
-                        <div className="overflow-x-auto rounded-xl border border-paper-200">
-                        <table className="w-full border-collapse text-center text-sm">
-                          <thead>
-                            <tr className="bg-paper-50/50">
-                              <th className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">四柱</th>
-                              <th className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">年柱 / YEAR</th>
-                              <th className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">月柱 / MONTH</th>
-                              <th className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">日柱 / DAY</th>
-                              <th className="p-4 border-b border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">时柱 / HOUR</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr className="hover:bg-paper-50/50 transition-colors cursor-default group">
-                              <td className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">十神</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.year.tenGod}</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.month.tenGod}</td>
-                              <td className="p-4 border-b border-r border-paper-200 font-bold text-gold-700 bg-gold-50/30">{birthInfo.gender === 'male' ? '元男' : '元女'}</td>
-                              <td className="p-4 border-b border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.hour.tenGod}</td>
-                            </tr>
-                            <tr className="hover:bg-paper-50/50 transition-colors cursor-default group">
-                              <td className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">天干</td>
-                              <td className="p-4 border-b border-r border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.year.gan))}>{fateData.bazi.pillars.year.gan}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.year.ganYinYang}</span>
-                              </td>
-                              <td className="p-4 border-b border-r border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.month.gan))}>{fateData.bazi.pillars.month.gan}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.month.ganYinYang}</span>
-                              </td>
-                              <td className="p-4 border-b border-r border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.day.gan))}>{fateData.bazi.pillars.day.gan}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.day.ganYinYang}</span>
-                              </td>
-                              <td className="p-4 border-b border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.hour.gan))}>{fateData.bazi.pillars.hour.gan}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.hour.ganYinYang}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-paper-50/50 transition-colors cursor-default group">
-                              <td className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">地支</td>
-                              <td className="p-4 border-b border-r border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.year.zhi))}>{fateData.bazi.pillars.year.zhi}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.year.zhiYinYang}</span>
-                              </td>
-                              <td className="p-4 border-b border-r border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.month.zhi))}>{fateData.bazi.pillars.month.zhi}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.month.zhiYinYang}</span>
-                              </td>
-                              <td className="p-4 border-b border-r border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.day.zhi))}>{fateData.bazi.pillars.day.zhi}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.day.zhiYinYang}</span>
-                              </td>
-                              <td className="p-4 border-b border-paper-200">
-                                <span className={cn("text-3xl font-serif block group-hover:scale-110 transition-transform", getElementColor(fateData.bazi.pillars.hour.zhi))}>{fateData.bazi.pillars.hour.zhi}</span>
-                                <span className="text-[10px] text-ink-400 mt-1 block">{fateData.bazi.pillars.hour.zhiYinYang}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-paper-50/50 transition-colors cursor-default group">
-                              <td className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">藏干</td>
-                              {[fateData.bazi.pillars.year, fateData.bazi.pillars.month, fateData.bazi.pillars.day, fateData.bazi.pillars.hour].map((p, i) => (
-                                <td key={i} className={cn("p-4 border-b align-top group-hover:bg-gold-50/10 transition-colors", i < 3 && "border-r border-paper-200")}>
-                                  {p.hiddenStems.map((s, j) => (
-                                    <div key={j} className="mb-1">
-                                      <span className={cn("font-serif", getElementColor(s.gan))}>{s.gan}</span>
-                                      <span className="text-[10px] text-ink-400 ml-1">({s.tenGod})</span>
-                                    </div>
-                                  ))}
-                                </td>
-                              ))}
-                            </tr>
-                            <tr className="hover:bg-paper-50/50 transition-colors cursor-default group">
-                              <td className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">纳音</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.year.naYin}</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.month.naYin}</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.day.naYin}</td>
-                              <td className="p-4 border-b border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.hour.naYin}</td>
-                            </tr>
-                            <tr className="hover:bg-paper-50/50 transition-colors cursor-default group">
-                              <td className="p-4 border-b border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">空亡</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.year.kongWang}</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.month.kongWang}</td>
-                              <td className="p-4 border-b border-r border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.day.kongWang}</td>
-                              <td className="p-4 border-b border-paper-200 group-hover:text-gold-700 transition-colors">{fateData.bazi.pillars.hour.kongWang}</td>
-                            </tr>
-                            <tr className="hover:bg-paper-50/50 transition-colors cursor-default group">
-                              <td className="p-4 border-r border-paper-200 text-[10px] uppercase tracking-widest text-ink-400 font-bold">神煞</td>
-                              {[fateData.bazi.pillars.year, fateData.bazi.pillars.month, fateData.bazi.pillars.day, fateData.bazi.pillars.hour].map((p, i) => (
-                                <td key={i} className={cn("p-4 align-top group-hover:bg-gold-50/10 transition-colors", i < 3 && "border-r border-paper-200")}>
-                                  {p.shenSha.map((s, j) => (
-                                    <div key={j} className="text-[10px] text-gold-700 leading-tight mb-1">{s}</div>
-                                  ))}
-                                </td>
-                              ))}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
+                        {/* BaZi Table (Desktop) */}
+                        <div className="hidden md:block overflow-x-auto rounded-xl border border-paper-200">
+                          <table className="w-full border-collapse text-center text-sm">
+                            <thead>
+                              <tr className="bg-paper-50 border-b border-paper-200">
+                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">项目</th>
+                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">年柱</th>
+                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">月柱</th>
+                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">日柱</th>
+                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">时柱</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr className="border-b border-paper-100">
+                                <td className="p-3 text-[10px] text-ink-400 font-bold">天干</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.year.gan))}>{fateData.bazi.pillars.year.gan}</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.month.gan))}>{fateData.bazi.pillars.month.gan}</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.day.gan))}>{fateData.bazi.pillars.day.gan}</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.hour.gan))}>{fateData.bazi.pillars.hour.gan}</td>
+                              </tr>
+                              <tr className="border-b border-paper-100">
+                                <td className="p-3 text-[10px] text-ink-400 font-bold">地支</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.year.zhi))}>{fateData.bazi.pillars.year.zhi}</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.month.zhi))}>{fateData.bazi.pillars.month.zhi}</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.day.zhi))}>{fateData.bazi.pillars.day.zhi}</td>
+                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.hour.zhi))}>{fateData.bazi.pillars.hour.zhi}</td>
+                              </tr>
+                              <tr className="border-b border-paper-100">
+                                <td className="p-3 text-[10px] text-ink-400 font-bold">十神</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.year.tenGod}</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.month.tenGod}</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.day.tenGod}</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.hour.tenGod}</td>
+                              </tr>
+                              <tr>
+                                <td className="p-3 text-[10px] text-ink-400 font-bold">纳音</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.year.naYin}</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.month.naYin}</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.day.naYin}</td>
+                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.hour.naYin}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* BaZi Vertical Stack (Mobile) */}
+                        <div className="md:hidden space-y-4">
+                          {[
+                            { title: '年柱', pillar: fateData.bazi.pillars.year },
+                            { title: '月柱', pillar: fateData.bazi.pillars.month },
+                            { title: '日柱', pillar: fateData.bazi.pillars.day },
+                            { title: '时柱', pillar: fateData.bazi.pillars.hour },
+                          ].map((item, i) => (
+                            <div key={i} className="bg-white border border-paper-200 rounded-xl p-4 grid grid-cols-2 gap-4">
+                              <div className="col-span-2 text-[10px] font-bold text-ink-400 uppercase tracking-widest border-b border-paper-100 pb-2">{item.title}</div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-ink-400">天干</p>
+                                <p className={cn("text-2xl font-serif", getElementColor(item.pillar.gan))}>{item.pillar.gan}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-ink-400">地支</p>
+                                <p className={cn("text-2xl font-serif", getElementColor(item.pillar.zhi))}>{item.pillar.zhi}</p>
+                              </div>
+                              <div className="col-span-2 text-xs text-ink-600">十神: {item.pillar.tenGod} | 纳音: {item.pillar.naYin}</div>
+                            </div>
+                          ))}
+                        </div>
 
                       {/* BaZi Relations Section */}
                       {fateData.bazi.relations && fateData.bazi.relations.length > 0 && (
@@ -1364,7 +1283,7 @@ export default function App() {
                       </div>
 
                       <div className="bg-white border border-paper-200 rounded-3xl p-4 aspect-square max-w-2xl mx-auto relative overflow-hidden shadow-inner">
-                        <div className="grid grid-cols-4 grid-rows-4 h-full gap-2 relative z-10">
+                        <div className="grid grid-cols-4 grid-rows-4 h-full gap-1 relative z-10">
                           {/* Standard Ziwei Grid Layout (Clockwise from Bottom-Left) */}
                             {[
                               { idx: 3, pos: 'col-start-1 row-start-1' }, { idx: 4, pos: 'col-start-2 row-start-1' }, { idx: 5, pos: 'col-start-3 row-start-1' }, { idx: 6, pos: 'col-start-4 row-start-1' },
@@ -1382,7 +1301,7 @@ export default function App() {
                                   key={p.idx} 
                                   onClick={() => setSelectedPalace(isSelected ? null : p.idx)}
                                   className={cn(
-                                    "border rounded-xl p-1.5 flex flex-col justify-between transition-all cursor-pointer group relative overflow-hidden bg-white/50 backdrop-blur-sm",
+                                    "border rounded p-0.5 flex flex-col justify-between transition-all cursor-pointer group relative overflow-hidden bg-white/50 backdrop-blur-sm",
                                     isSelected ? "border-gold-500 bg-gold-50 shadow-lg z-10 scale-105" : 
                                     isSanFang ? "border-emerald-300 bg-emerald-50/30" :
                                     isSiZheng ? "border-blue-300 bg-blue-50/30" :
@@ -1392,73 +1311,44 @@ export default function App() {
                                 >
                                   {/* Palace Header */}
                                   <div className="flex justify-between items-start z-10">
-                                    <div className="flex flex-col">
-                                      <div className="flex items-center gap-0.5 leading-none">
-                                        <span className="text-[10px] font-bold text-ink-900">{palace.gan}</span>
-                                        <span className="text-[10px] font-bold text-ink-900">{palace.zhi}</span>
-                                      </div>
-                                      <span className="text-[7px] text-ink-300 font-mono uppercase tracking-tighter">
-                                        {palace.zhi === '子' ? 'Zi' : palace.zhi === '丑' ? 'Chou' : palace.zhi === '寅' ? 'Yin' : palace.zhi === '卯' ? 'Mao' : 
-                                         palace.zhi === '辰' ? 'Chen' : palace.zhi === '巳' ? 'Si' : palace.zhi === '午' ? 'Wu' : palace.zhi === '未' ? 'Wei' : 
-                                         palace.zhi === '申' ? 'Shen' : palace.zhi === '酉' ? 'You' : palace.zhi === '戌' ? 'Xu' : 'Hai'}
-                                      </span>
+                                    <div className="flex items-center gap-0.5 leading-none">
+                                      <span className="text-[8px] font-bold text-ink-900">{palace.gan}</span>
+                                      <span className="text-[8px] font-bold text-ink-900">{palace.zhi}</span>
                                     </div>
                                     <span className={cn(
-                                      "text-[10px] font-bold transition-colors px-1 py-0.5 rounded leading-none",
+                                      "text-[8px] font-bold transition-colors px-0.5 rounded leading-none",
                                       isSelected ? "bg-gold-600 text-white" : "text-gold-600 group-hover:text-gold-700"
                                     )}>{palace.name}</span>
                                   </div>
 
-                                <div className="flex-1 flex justify-between gap-1 py-1 min-h-0 relative z-10">
-                                  {/* Left: Minor Stars (Traditional Vertical) */}
-                                  <div className="flex flex-row-reverse items-start gap-1 overflow-hidden">
+                                <div className="flex-1 flex justify-between gap-0.5 py-0.5 min-h-0 relative z-10">
+                                  {/* Left: Minor Stars */}
+                                  <div className="flex flex-row-reverse items-start gap-0.5 overflow-hidden">
                                     {palace.minorStars.map((star, sIdx) => (
                                       <div key={sIdx} className="flex flex-col items-center">
                                         <span 
-                                          className="text-[10px] text-blue-600 font-medium leading-tight text-center"
+                                          className="text-[8px] text-blue-600 font-medium leading-tight text-center"
                                           style={{ writingMode: 'vertical-rl' }}
                                         >
                                           {star.name}
                                         </span>
-                                        {star.transformation && (
-                                          <span className={cn(
-                                            "text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full text-white font-bold leading-none mt-1 shadow-sm",
-                                            star.transformation === '禄' ? 'bg-emerald-500' :
-                                            star.transformation === '权' ? 'bg-red-500' :
-                                            star.transformation === '科' ? 'bg-blue-500' : 'bg-ink-900'
-                                          )}>{star.transformation}</span>
-                                        )}
                                       </div>
                                     ))}
-                                    {/* Status Stars */}
-                                    <div className="mt-auto flex flex-col gap-0.5 self-end pb-1">
-                                      {palace.statusStars.slice(0, 2).map((s, i) => (
-                                        <span key={i} className="text-[8px] text-ink-400 font-medium leading-none whitespace-nowrap bg-paper-50 px-0.5 rounded">{s}</span>
-                                      ))}
-                                    </div>
                                   </div>
 
-                                  {/* Right: Major Stars (Traditional Vertical) */}
-                                  <div className="flex flex-row-reverse items-start gap-1.5 overflow-hidden">
+                                  {/* Right: Major Stars */}
+                                  <div className="flex flex-row-reverse items-start gap-0.5 overflow-hidden">
                                     {palace.majorStars.map((star, sIdx) => (
                                       <div key={sIdx} className="flex flex-col items-center">
                                         <span 
                                           className={cn(
-                                            "text-[13px] font-serif font-bold leading-tight text-center tracking-tighter",
+                                            "text-[10px] font-serif font-bold leading-tight text-center tracking-tighter",
                                             ['紫微', '天府', '武曲', '天相', '太阳', '太阴'].includes(star.name) ? 'text-red-600' : 'text-ink-900'
                                           )}
                                           style={{ writingMode: 'vertical-rl' }}
                                         >
                                           {star.name}
                                         </span>
-                                        {star.transformation && (
-                                          <span className={cn(
-                                            "text-[9px] w-4 h-4 flex items-center justify-center rounded-full text-white font-bold leading-none mt-1 shadow-sm",
-                                            star.transformation === '禄' ? 'bg-emerald-500' :
-                                            star.transformation === '权' ? 'bg-red-500' :
-                                            star.transformation === '科' ? 'bg-blue-500' : 'bg-ink-900'
-                                          )}>{star.transformation}</span>
-                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -1466,57 +1356,22 @@ export default function App() {
 
                                   {/* Palace Footer */}
                                   <div className="flex justify-between items-end z-10">
-                                    <div className="flex flex-col gap-0.5">
-                                      {palace.decadal && (
-                                        <span className="text-[7px] text-gold-700 font-bold bg-gold-50 px-1 rounded leading-none">
-                                          {palace.decadal.range[0]}-{palace.decadal.range[1]}
-                                        </span>
-                                      )}
-                                      <div className="flex gap-0.5">
-                                        {palace.yearlyStars.length > 0 && <span className="text-[7px] text-emerald-700 font-bold bg-emerald-50 px-1 rounded leading-none">流</span>}
-                                        {palace.decadalStars.length > 0 && <span className="text-[7px] text-blue-700 font-bold bg-blue-50 px-1 rounded leading-none">大</span>}
-                                      </div>
+                                    <div className="flex gap-0.5">
+                                      {palace.yearlyStars.length > 0 && <span className="text-[6px] text-emerald-700 font-bold bg-emerald-50 px-0.5 rounded leading-none">流</span>}
+                                      {palace.decadalStars.length > 0 && <span className="text-[6px] text-blue-700 font-bold bg-blue-50 px-0.5 rounded leading-none">大</span>}
                                     </div>
-                                    <div className="flex flex-col items-end">
-                                      <div className="flex flex-wrap justify-end gap-0.5 max-w-[48px]">
-                                        {palace.adjectiveStars.slice(0, 4).map((s, i) => (
-                                          <span key={i} className="text-[7px] text-ink-400 leading-none border-b border-paper-100">{s}</span>
-                                        ))}
-                                      </div>
-                                      <span className="text-[8px] text-ink-200 font-mono italic leading-none mt-0.5">
-                                        {palace.gan}{palace.zhi}
-                                      </span>
-                                    </div>
+                                    <span className="text-[7px] text-ink-200 font-mono italic leading-none">
+                                      {palace.gan}{palace.zhi}
+                                    </span>
                                   </div>
-
-                                  {/* Indicators */}
-                                  {isSelected && <div className="absolute top-0 right-0 w-1 h-full bg-gold-500 z-20" />}
-                                  {isSanFang && <div className="absolute top-0 right-0 w-1 h-full bg-emerald-400/50 z-20" />}
-                                  {isSiZheng && <div className="absolute top-0 right-0 w-1 h-full bg-blue-400/50 z-20" />}
                                 </div>
                               );
                             })}
-                          <div className="col-span-2 row-span-2 col-start-2 row-start-2 border border-paper-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center space-y-2">
-                            <p className="text-[10px] text-ink-400 uppercase tracking-widest">基本信息</p>
-                            <div className="text-[10px] leading-relaxed text-ink-600">
-                              公历：{fateData.ziwei.solarDate}<br/>
-                              农历：{fateData.ziwei.lunarDate}<br/>
-                              命主：{fateData.ziwei.lifeMaster} / 身主：{fateData.ziwei.bodyMaster}
+                          <div className="col-span-2 row-span-2 col-start-2 row-start-2 border border-paper-100 rounded-xl p-1 flex flex-col items-center justify-center text-center space-y-0.5">
+                            <p className="text-[8px] text-ink-400 uppercase tracking-widest">基本</p>
+                            <div className="text-[7px] leading-tight text-ink-600">
+                              {fateData.ziwei.lifeMaster} / {fateData.ziwei.bodyMaster}
                             </div>
-                            {fateData.ziwei.decadal && (
-                              <div className="mt-2 p-2 bg-gold-50 rounded-lg border border-gold-100 w-full">
-                                <p className="text-[8px] text-gold-700 font-bold uppercase tracking-widest">当前大运</p>
-                                <p className="text-[10px] font-bold text-gold-900">{fateData.ziwei.decadal.range[0]}-{fateData.ziwei.decadal.range[1]}岁 ({fateData.ziwei.decadal.gan}{fateData.ziwei.decadal.zhi})</p>
-                                <p className="text-[9px] text-gold-600">{fateData.ziwei.decadal.name}宫</p>
-                              </div>
-                            )}
-                            {fateData.ziwei.yearly && (
-                              <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-100 w-full">
-                                <p className="text-[8px] text-emerald-700 font-bold uppercase tracking-widest">当前流年</p>
-                                <p className="text-[10px] font-bold text-emerald-900">{fateData.ziwei.yearly.year}年 ({fateData.ziwei.yearly.gan}{fateData.ziwei.yearly.zhi})</p>
-                                <p className="text-[9px] text-emerald-600">{fateData.ziwei.yearly.name}宫</p>
-                              </div>
-                            )}
                           </div>
                           
                           {/* SVG Overlay for San Fang Si Zheng Lines */}
@@ -1701,209 +1556,68 @@ export default function App() {
                             ))}
                           </div>
                         </div>
-                        <div className="space-y-8">
-                          <div className="bg-white border border-paper-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4">
-                            <div className="w-24 h-24 rounded-full bg-gold-50 flex items-center justify-center">
-                              <Sun className="w-12 h-12 text-gold-500" />
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">太阳星座 / SUN SIGN</p>
-                              <p className="text-3xl font-serif text-ink-900">{fateData.western.sunSign}座</p>
-                            </div>
-                            <p className="text-xs text-ink-500 max-w-xs">
-                              太阳星座代表了您的核心自我、意志力以及生命力的源泉。
-                            </p>
+                        <div className="bg-white border border-paper-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4">
+                          <div className="w-24 h-24 rounded-full bg-gold-50 flex items-center justify-center">
+                            <Sun className="w-12 h-12 text-gold-500" />
                           </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">太阳星座 / SUN SIGN</p>
+                            <p className="text-3xl font-serif text-ink-900">{fateData.western.sunSign}座</p>
+                          </div>
+                          <p className="text-xs text-ink-500 max-w-xs">
+                            太阳星座代表了您的核心自我、意志力以及生命力的源泉。
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-                          <div className="bg-white border border-paper-200 rounded-3xl p-8 space-y-6">
-                            <div className="flex items-center gap-3">
-                              <Globe className="w-6 h-6 text-gold-500" />
-                              <h4 className="text-xl font-serif">行星位置 / PLANET POSITIONS</h4>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              {fateData.western.planetPositions.map((p: any, i: number) => {
-                                const signs = ['白羊', '金牛', '双子', '巨蟹', '狮子', '处女', '天秤', '天蝎', '射手', '摩羯', '水瓶', '双鱼'];
-                                const signIndex = Math.floor(p.longitude / 30);
-                                const degree = Math.floor(p.longitude % 30);
-                                const minute = Math.floor((p.longitude % 1) * 60);
-                                return (
-                                  <div key={i} className="flex justify-between items-center p-3 bg-paper-50 rounded-xl">
-                                    <span className="text-xs font-bold text-ink-700">{p.name}</span>
-                                    <span className="text-xs text-ink-500">{signs[signIndex]} {degree}°{minute}'</span>
-                                  </div>
-                                );
-                              })}
+                  {activeTab === 'mbti' && fateData.mbti && (
+                    <div className="space-y-8">
+                      <div className="bg-white border border-paper-200 rounded-3xl p-12 space-y-12">
+                        <div className="text-center space-y-4">
+                          <div className="inline-flex items-center gap-2 px-4 py-1 bg-ink-900 text-paper-50 rounded-full text-[10px] uppercase tracking-widest font-bold">
+                            Personality Profile
+                          </div>
+                          <h3 className="text-5xl font-serif">{fateData.mbti.energy}{fateData.mbti.perception}{fateData.mbti.judgment}{fateData.mbti.lifestyle}</h3>
+                          <p className="text-ink-500 font-light italic">
+                            {fateData.mbti.energy === 'E' ? '外向' : '内向'} · 
+                            {fateData.mbti.perception === 'S' ? '实感' : '直觉'} · 
+                            {fateData.mbti.judgment === 'T' ? '思考' : '情感'} · 
+                            {fateData.mbti.lifestyle === 'J' ? '判断' : '知觉'}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                          <div className="space-y-6">
+                            <h4 className="text-[11px] font-bold text-ink-400 uppercase tracking-[0.2em]">性格优势 / STRENGTHS</h4>
+                            <ul className="space-y-3">
+                              {[
+                                fateData.mbti.perception === 'N' ? '富有远见，善于发现潜在可能性' : '脚踏实地，关注细节与现实',
+                                fateData.mbti.judgment === 'F' ? '极具同理心，善于维护和谐关系' : '逻辑严密，决策果断客观',
+                                fateData.mbti.energy === 'E' ? '充满活力，善于在社交中获取能量' : '深思熟虑，享受独处的宁静'
+                              ].map((s, i) => (
+                                <li key={i} className="flex items-start gap-3 text-sm text-ink-700">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" />
+                                  {s}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="space-y-6">
+                            <h4 className="text-[11px] font-bold text-ink-400 uppercase tracking-[0.2em]">成长建议 / GROWTH</h4>
+                            <div className="p-6 bg-paper-50 rounded-2xl border border-paper-100">
+                              <p className="text-sm text-ink-600 leading-relaxed font-light">
+                                作为 {fateData.mbti.energy}{fateData.mbti.perception}{fateData.mbti.judgment}{fateData.mbti.lifestyle} 型人格，您在
+                                {fateData.mbti.lifestyle === 'P' ? ' 灵活性与适应力 ' : ' 组织性与计划性 '} 方面表现卓越。
+                                建议在日常生活中尝试平衡您的 {fateData.mbti.judgment === 'T' ? ' 情感表达 ' : ' 逻辑分析 '}，这将使您的决策更加全面。
+                              </p>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   )}
-
-                  {activeTab === 'lifeNumerology' && fateData.lifeNumerology && (() => {
-                    const details = NUMEROLOGY_DESCRIPTIONS[fateData.lifeNumerology.lifePathNumber];
-                    return (
-                      <div className="space-y-8">
-                        <div className="bg-white border border-paper-200 rounded-3xl p-12 flex flex-col items-center text-center space-y-8">
-                          <div className="w-32 h-32 rounded-full bg-purple-50 flex items-center justify-center border-4 border-purple-100 shadow-inner">
-                            <span className="text-6xl font-serif text-purple-600">{fateData.lifeNumerology.lifePathNumber}</span>
-                          </div>
-                          <div className="space-y-4 max-w-2xl">
-                            <div className="inline-flex items-center gap-2 px-4 py-1 bg-purple-600 text-paper-50 rounded-full text-[10px] uppercase tracking-widest font-bold">
-                              Life Path Number / 生命灵数
-                            </div>
-                            <h3 className="text-3xl font-serif text-ink-900">
-                              {details ? `您的生命道路数字是 ${fateData.lifeNumerology.lifePathNumber}：${details.title}` : `您的生命道路数字是 ${fateData.lifeNumerology.lifePathNumber}`}
-                            </h3>
-                            
-                            {details ? (
-                              <div className="space-y-8 mt-8">
-                                <p className="text-lg text-ink-600 leading-relaxed italic">
-                                  "{details.description}"
-                                </p>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-                                  <div className="space-y-4">
-                                    <h4 className="text-sm font-bold uppercase tracking-widest text-purple-600">核心特质 / TRAITS</h4>
-                                    <div className="flex flex-wrap gap-2">
-                                      {details.traits.map((t, i) => (
-                                        <span key={i} className="px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
-                                          {t}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <div className="space-y-4">
-                                    <h4 className="text-sm font-bold uppercase tracking-widest text-purple-600">成长建议 / ADVICE</h4>
-                                    <p className="text-sm text-ink-700 leading-relaxed">
-                                      {details.advice}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <p className="text-lg text-ink-600 leading-relaxed">
-                                {fateData.lifeNumerology.meaning}
-                              </p>
-                            )}
-                            
-                            <div className="h-[1px] w-24 bg-paper-200 mx-auto my-8" />
-                            <p className="text-sm text-ink-400 italic">
-                              生命灵数（Numerology）源于古希腊数学家毕达哥拉斯，通过出生日期的数字能量，揭示一个人的天赋才华、性格特质以及人生使命。
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {activeTab === 'mbti' && fateData.mbti && (() => {
-                    const type = `${fateData.mbti.energy}${fateData.mbti.perception}${fateData.mbti.judgment}${fateData.mbti.lifestyle}`;
-                    const details = MBTI_DESCRIPTIONS[type];
-                    return (
-                      <div className="space-y-8">
-                        <div className="bg-white border border-paper-200 rounded-3xl p-12 space-y-12">
-                          <div className="text-center space-y-4">
-                            <div className="inline-flex items-center gap-2 px-4 py-1 bg-ink-900 text-paper-50 rounded-full text-[10px] uppercase tracking-widest font-bold">
-                              Personality Profile
-                            </div>
-                            <h3 className="text-5xl font-serif">{type}</h3>
-                            {details ? (
-                              <div className="space-y-2">
-                                <p className="text-2xl font-serif text-ink-900">{details.title}</p>
-                                <p className="text-ink-500 font-light italic max-w-2xl mx-auto">
-                                  {details.description}
-                                </p>
-                              </div>
-                            ) : (
-                              <p className="text-ink-500 font-light italic">
-                                {fateData.mbti.energy === 'E' ? '外向' : '内向'} · 
-                                {fateData.mbti.perception === 'S' ? '实感' : '直觉'} · 
-                                {fateData.mbti.judgment === 'T' ? '思考' : '情感'} · 
-                                {fateData.mbti.lifestyle === 'J' ? '判断' : '知觉'}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                            <div className="space-y-6">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                </div>
-                                <h4 className="text-lg font-serif">核心优势 / STRENGTHS</h4>
-                              </div>
-                              {details ? (
-                                <div className="grid grid-cols-2 gap-3">
-                                  {details.strengths.map((s, i) => (
-                                    <div key={i} className="p-3 bg-emerald-50/30 rounded-xl text-sm text-emerald-700 font-medium">
-                                      {s}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <ul className="space-y-3">
-                                  {[
-                                    fateData.mbti.perception === 'N' ? '富有远见，善于发现潜在可能性' : '脚踏实地，关注细节与现实',
-                                    fateData.mbti.judgment === 'F' ? '极具同理心，善于维护和谐关系' : '逻辑严密，决策果断客观',
-                                    fateData.mbti.energy === 'E' ? '充满活力，善于在社交中获取能量' : '深思熟虑，享受独处的宁静'
-                                  ].map((s, i) => (
-                                    <li key={i} className="flex items-start gap-3 text-sm text-ink-700">
-                                      <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" />
-                                      {s}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                            <div className="space-y-6">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                                  <Zap className="w-4 h-4 text-blue-500" />
-                                </div>
-                                <h4 className="text-lg font-serif">成长建议 / GROWTH</h4>
-                              </div>
-                              {details ? (
-                                <div className="grid grid-cols-2 gap-3">
-                                  {details.growth.map((g, i) => (
-                                    <div key={i} className="p-3 bg-blue-50/30 rounded-xl text-sm text-blue-700 font-medium">
-                                      {g}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="p-6 bg-paper-50 rounded-2xl border border-paper-100">
-                                  <p className="text-sm text-ink-600 leading-relaxed font-light">
-                                    作为 {type} 型人格，您在
-                                    {fateData.mbti.lifestyle === 'P' ? ' 灵活性与适应力 ' : ' 组织性与计划性 '} 方面表现卓越。
-                                    建议在日常生活中尝试平衡您的 {fateData.mbti.judgment === 'T' ? ' 情感表达 ' : ' 逻辑分析 '}，这将使您的决策更加全面。
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {details && details.careers && (
-                            <div className="space-y-6 pt-8 border-t border-paper-100">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-                                  <Briefcase className="w-4 h-4 text-amber-500" />
-                                </div>
-                                <h4 className="text-lg font-serif">职业推荐 / CAREERS</h4>
-                              </div>
-                              <div className="flex flex-wrap gap-3">
-                                {details.careers.map((c, i) => (
-                                  <span key={i} className="px-4 py-2 bg-amber-50/50 text-amber-800 rounded-xl text-sm font-medium border border-amber-100">
-                                    {c}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
 
                   {activeTab === 'history' && (
                     <div className="space-y-8">
@@ -2076,21 +1790,6 @@ export default function App() {
                       </button>
                       <button 
                         onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(aiReport);
-                            setCopySuccess('report');
-                            setTimeout(() => setCopySuccess(null), 2000);
-                          } catch (err) {
-                            console.error('Failed to copy report:', err);
-                          }
-                        }}
-                        className="p-2 rounded-full hover:bg-paper-50 text-ink-400 transition-colors relative"
-                        title="复制报告"
-                      >
-                        {copySuccess === 'report' ? <ClipboardCheck size={20} className="text-emerald-500" /> : <Copy size={20} />}
-                      </button>
-                      <button 
-                        onClick={async () => {
                           if (navigator.share) {
                             try {
                               await navigator.share({
@@ -2102,19 +1801,13 @@ export default function App() {
                               console.log('Share failed:', err);
                             }
                           } else {
-                            try {
-                              await navigator.clipboard.writeText(window.location.href);
-                              setCopySuccess('link');
-                              setTimeout(() => setCopySuccess(null), 2000);
-                            } catch (err) {
-                              console.error('Failed to copy link:', err);
-                            }
+                            navigator.clipboard.writeText(window.location.href);
+                            alert('链接已复制到剪贴板');
                           }
                         }}
-                        className="p-2 rounded-full hover:bg-paper-50 text-ink-400 transition-colors relative"
-                        title="分享链接"
+                        className="p-2 rounded-full hover:bg-paper-50 text-ink-400 transition-colors"
                       >
-                        {copySuccess === 'link' ? <ClipboardCheck size={20} className="text-emerald-500" /> : <Share2 size={20} />}
+                        <Share2 size={20} />
                       </button>
                     </div>
                   </div>
@@ -2198,113 +1891,6 @@ export default function App() {
                 </>
               )}
             </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* History Modal */}
-        <AnimatePresence>
-          {showHistory && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setShowHistory(false)}
-                className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm"
-              />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="relative w-full max-w-2xl bg-paper-50 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
-              >
-                <div className="p-6 border-b border-paper-100 flex items-center justify-between bg-white">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gold-50 flex items-center justify-center">
-                      <History className="w-5 h-5 text-gold-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-ink-900">历史记录</h3>
-                      <p className="text-xs text-ink-400 uppercase tracking-widest">History Records</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setShowHistory(false)}
-                    className="p-2 rounded-full hover:bg-paper-100 text-ink-400 transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                  {history.length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 rounded-full bg-paper-100 flex items-center justify-center mx-auto mb-4">
-                        <History className="w-8 h-8 text-ink-200" />
-                      </div>
-                      <p className="text-ink-400 text-sm">暂无历史记录</p>
-                    </div>
-                  ) : (
-                    history.map((record) => (
-                      <div 
-                        key={record.id}
-                        className="group bg-white border border-paper-100 rounded-2xl p-4 hover:border-gold-200 hover:shadow-md transition-all flex items-center justify-between"
-                      >
-                        <div 
-                          className="flex-1 cursor-pointer"
-                          onClick={() => loadRecord(record)}
-                        >
-                          <div className="flex items-center gap-3 mb-1">
-                            <span className="text-sm font-bold text-ink-900">{record.name}</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-paper-100 text-ink-500 uppercase tracking-wider">
-                              {record.birthInfo.gender === 'male' ? '乾造' : '坤造'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-4 text-[11px] text-ink-400">
-                            <div className="flex items-center gap-1">
-                              <Calendar size={12} />
-                              <span>{record.birthInfo.year}-{record.birthInfo.month}-{record.birthInfo.day}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock size={12} />
-                              <span>{record.birthInfo.hour}:{record.birthInfo.minute.toString().padStart(2, '0')}</span>
-                            </div>
-                            {record.aiReport && (
-                              <div className="flex items-center gap-1 text-emerald-600 font-medium">
-                                <BrainCircuit size={12} />
-                                <span>已解读</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => loadRecord(record)}
-                            className="p-2 rounded-xl bg-paper-50 text-ink-400 hover:bg-gold-50 hover:text-gold-600 transition-colors"
-                            title="查看"
-                          >
-                            <ChevronRight size={18} />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteRecord(record.id)}
-                            className="p-2 rounded-xl bg-paper-50 text-ink-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                            title="删除"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="p-6 bg-paper-50 border-t border-paper-100">
-                  <p className="text-[10px] text-ink-400 text-center uppercase tracking-[0.2em]">
-                    最多保存最近 20 条记录 / MAX 20 RECORDS
-                  </p>
-                </div>
-              </motion.div>
-            </div>
           )}
         </AnimatePresence>
       </main>
