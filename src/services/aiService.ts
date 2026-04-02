@@ -1,12 +1,13 @@
-// 火山方舟 AI Service - 通过 Vercel Edge Function 代理
-const ARK_API_KEY = import.meta.env.VITE_ARK_API_KEY;
-const ARK_BASE_URL = '/api/ai'; // 调用同域代理 API
+// 硅基流动 AI Service
+const SILICONFLOW_API_KEY = import.meta.env.VITE_SILICONFLOW_API_KEY;
+const SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1';
 
-if (!ARK_API_KEY) {
-  console.error("Ark API configuration is missing. Please check your environment variables.");
+if (!SILICONFLOW_API_KEY) {
+  console.error("SiliconFlow API configuration is missing. Please check your environment variables.");
 }
 
-const MODEL_ID = 'ep-20260326101147-6hrzr';
+const MODEL_ID = 'Qwen/Qwen2.5-7B-Instruct';
+const DEEP_MODEL_ID = 'Qwen/Qwen2.5-72B-Instruct';
 
 function buildPrompt(birthInfo: any, fateData: any): string {
   return `
@@ -89,14 +90,14 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
   const userPrompt = buildPrompt(birthInfo, fateData);
 
   try {
-    const response = await fetch(`${ARK_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${SILICONFLOW_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ARK_API_KEY}`,
+        'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
       },
       body: JSON.stringify({
-        model: MODEL_ID,
+        model: depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID,
         messages: [
           { role: 'system', content: systemInstruction },
           { role: 'user', content: userPrompt }
@@ -108,7 +109,7 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Ark API Error:", error);
+      console.error("SiliconFlow API Error:", error);
       return "抱歉，AI 解读暂时无法生成。请稍后再试。";
     }
 
@@ -172,11 +173,11 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
       { role: 'user', content: message }
     ];
 
-    const response = await fetch(`${ARK_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${SILICONFLOW_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ARK_API_KEY}`,
+        'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
       },
       body: JSON.stringify({
         model: MODEL_ID,
@@ -188,7 +189,7 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Ark API Error:", error);
+      console.error("SiliconFlow API Error:", error);
       return "抱歉，大师现在有点忙，请稍后再问。";
     }
 
