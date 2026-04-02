@@ -935,3 +935,263 @@ export function calculateZiwei(
     } : undefined
   };
 }
+
+// ==================== 增强版结构化分析数据 ====================
+
+export interface StructuredBaziAnalysis {
+  // 基本信息
+  dayMaster: {
+    gan: string;
+    element: string;
+    yinYang: string;
+    description: string;
+  };
+  
+  // 五行分析
+  fiveElements: {
+    scores: Record<string, number>;
+    percentages: Record<string, number>;
+    dominant: string;
+    weakest: string;
+  };
+  
+  // 日主强弱
+  strength: {
+    level: '极强' | '偏强' | '中和' | '偏弱' | '极弱';
+    score: number;
+    reason: string;
+  };
+  
+  // 喜用神
+  xiYongShen: {
+    xiShen: string;  // 喜神
+    yongShen: string; // 用神
+    jiShen: string;  // 忌神
+    reason: string;
+  };
+  
+  // 十神配置
+  tenGods: {
+    year: string;
+    month: string;
+    day: string;
+    hour: string;
+  };
+  
+  // 格局
+  pattern: {
+    name: string;
+    description: string;
+  };
+  
+  // 关键关系
+  relations: {
+    type: string;
+    description: string;
+  }[];
+}
+
+// 计算喜用神
+function calculateXiYongShen(
+  dayMasterElement: string,
+  fiveElements: Record<string, number>,
+  strength: string
+): { xiShen: string; yongShen: string; jiShen: string; reason: string } {
+  // 五行生克关系
+  const shengWo: Record<string, string> = {  // 生我者
+    '木': '水', '火': '木', '土': '火', '金': '土', '水': '金'
+  };
+  const woSheng: Record<string, string> = {  // 我生者
+    '木': '火', '火': '土', '土': '金', '金': '水', '水': '木'
+  };
+  const keWo: Record<string, string> = {     // 克我者
+    '木': '金', '火': '水', '土': '木', '金': '火', '水': '土'
+  };
+  const woKe: Record<string, string> = {     // 我克者
+    '木': '土', '火': '金', '土': '水', '金': '木', '水': '火'
+  };
+  
+  let xiShen, yongShen, jiShen, reason;
+  
+  if (strength === '极强' || strength === '偏强') {
+    // 身强：需要克泄耗
+    yongShen = keWo[dayMasterElement];  // 克我者为官杀
+    xiShen = woKe[dayMasterElement];    // 我克者为财星
+    jiShen = shengWo[dayMasterElement]; // 生我者为印星（忌神）
+    reason = `日主${dayMasterElement}身强，喜克泄耗，以${yongShen}（官杀）为用神，${xiShen}（财星）为喜神，忌${jiShen}（印星）生扶`;
+  } else if (strength === '极弱' || strength === '偏弱') {
+    // 身弱：需要生扶
+    yongShen = shengWo[dayMasterElement]; // 生我者为印星
+    xiShen = dayMasterElement;            // 同我者为比劫
+    jiShen = keWo[dayMasterElement];      // 克我者为官杀（忌神）
+    reason = `日主${dayMasterElement}身弱，喜生扶，以${yongShen}（印星）为用神，${xiShen}（比劫）为喜神，忌${jiShen}（官杀）克制`;
+  } else {
+    // 中和：根据五行分布调整
+    const sorted = Object.entries(fiveElements).sort((a, b) => b[1] - a[1]);
+    const strongest = sorted[0][0];
+    const weakest = sorted[sorted.length - 1][0];
+    
+    if (strongest === dayMasterElement) {
+      yongShen = woSheng[dayMasterElement];
+      xiShen = woKe[dayMasterElement];
+      jiShen = shengWo[dayMasterElement];
+      reason = `日主中和偏旺，以${yongShen}（食伤）泄秀为用神`;
+    } else {
+      yongShen = shengWo[dayMasterElement];
+      xiShen = dayMasterElement;
+      jiShen = keWo[dayMasterElement];
+      reason = `日主中和偏弱，以${yongShen}（印星）生扶为用神`;
+    }
+  }
+  
+  return { xiShen, yongShen, jiShen, reason };
+}
+
+// 计算格局
+function calculatePattern(
+  monthZhi: string,
+  dayGan: string,
+  tenGods: Record<string, string>
+): { name: string; description: string } {
+  const monthTenGod = tenGods.month;
+  
+  // 常见格局判断
+  if (monthTenGod === '比肩' || monthTenGod === '劫财') {
+    return {
+      name: '建禄格',
+      description: '月令为日主禄地，身强有力，宜财官食伤'
+    };
+  } else if (monthTenGod === '食神' || monthTenGod === '伤官') {
+    return {
+      name: '食伤格',
+      description: '月令为食伤，聪明灵巧，宜财星配合'
+    };
+  } else if (monthTenGod === '正财' || monthTenGod === '偏财') {
+    return {
+      name: '财格',
+      description: '月令为财星，重视物质，宜官星护财'
+    };
+  } else if (monthTenGod === '正官' || monthTenGod === '七杀') {
+    return {
+      name: '官杀格',
+      description: '月令为官杀，有领导才能，宜印星化解'
+    };
+  } else if (monthTenGod === '正印' || monthTenGod === '偏印') {
+    return {
+      name: '印格',
+      description: '月令为印星，学识渊博，宜财星破印'
+    };
+  }
+  
+  return {
+    name: '普通格',
+    description: '无明显格局，以五行平衡为主'
+  };
+}
+
+// 计算日主强弱得分
+function calculateStrengthScore(
+  dayMasterElement: string,
+  fiveElements: Record<string, number>,
+  monthZhiElement: string
+): { level: '极强' | '偏强' | '中和' | '偏弱' | '极弱'; score: number; reason: string } {
+  const selfScore = fiveElements[dayMasterElement] || 0;
+  const shengWo = { '木': '水', '火': '木', '土': '火', '金': '土', '水': '金' };
+  const supportScore = fiveElements[shengWo[dayMasterElement]] || 0;
+  const totalSupport = selfScore + supportScore;
+  
+  // 月令权重
+  const monthBonus = monthZhiElement === dayMasterElement || shengWo[dayMasterElement] === monthZhiElement ? 20 : 0;
+  const finalScore = totalSupport + monthBonus;
+  
+  let level: '极强' | '偏强' | '中和' | '偏弱' | '极弱';
+  let reason: string;
+  
+  if (finalScore >= 80) {
+    level = '极强';
+    reason = `日主${dayMasterElement}得令得地，五行得分${finalScore.toFixed(1)}，身强无依`;
+  } else if (finalScore >= 60) {
+    level = '偏强';
+    reason = `日主${dayMasterElement}得令或得地，五行得分${finalScore.toFixed(1)}，身强可用财官`;
+  } else if (finalScore >= 40) {
+    level = '中和';
+    reason = `日主${dayMasterElement}中和，五行得分${finalScore.toFixed(1)}，宜顺势而行`;
+  } else if (finalScore >= 20) {
+    level = '偏弱';
+    reason = `日主${dayMasterElement}失令失地，五行得分${finalScore.toFixed(1)}，身弱喜印比`;
+  } else {
+    level = '极弱';
+    reason = `日主${dayMasterElement}极弱，五行得分${finalScore.toFixed(1)}，从格或极弱扶抑`;
+  }
+  
+  return { level, score: finalScore, reason };
+}
+
+// 导出结构化分析数据
+export function getStructuredAnalysis(baziData: BaziData): StructuredBaziAnalysis {
+  const dayMasterGan = baziData.pillars.day.gan;
+  const dayMasterElement = getElement(dayMasterGan);
+  const monthZhi = baziData.pillars.month.zhi;
+  const monthZhiElement = getElement(monthZhi);
+  
+  // 五行分数
+  const scores: Record<string, number> = {};
+  const percentages: Record<string, number> = {};
+  Object.entries(baziData.fiveElements).forEach(([el, data]) => {
+    scores[el] = data.count;
+    percentages[el] = data.percentage;
+  });
+  
+  // 找出最强和最弱
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const dominant = sorted[0][0];
+  const weakest = sorted[sorted.length - 1][0];
+  
+  // 计算强弱
+  const strength = calculateStrengthScore(dayMasterElement, scores, monthZhiElement);
+  
+  // 计算喜用神
+  const xiYongShen = calculateXiYongShen(dayMasterElement, scores, strength.level);
+  
+  // 十神配置
+  const tenGods = {
+    year: baziData.pillars.year.tenGod,
+    month: baziData.pillars.month.tenGod,
+    day: '日主',
+    hour: baziData.pillars.hour.tenGod
+  };
+  
+  // 格局
+  const pattern = calculatePattern(monthZhi, dayMasterGan, {
+    year: tenGods.year,
+    month: tenGods.month,
+    day: tenGods.day,
+    hour: tenGods.hour
+  });
+  
+  // 关键关系
+  const relations = baziData.relations.slice(0, 5).map(r => ({
+    type: r.type,
+    description: r.description
+  }));
+  
+  return {
+    dayMaster: {
+      gan: dayMasterGan,
+      element: dayMasterElement,
+      yinYang: baziData.pillars.day.ganYinYang,
+      description: baziData.dayMaster.description
+    },
+    fiveElements: {
+      scores,
+      percentages,
+      dominant,
+      weakest
+    },
+    strength,
+    xiYongShen,
+    tenGods,
+    pattern,
+    relations
+  };
+}

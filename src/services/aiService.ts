@@ -1,115 +1,151 @@
-// 硅基流动 AI Service
-const SILICONFLOW_API_KEY = import.meta.env.VITE_SILICONFLOW_API_KEY;
-const SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1';
+// 火山方舟 AI Service - 使用结构化数据和分步推理
+const ARK_API_KEY = '92e7669d-4a53-49bb-99fa-e81262096cb6';
+const ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
+const MODEL_ID = 'ep-20260402174320-2ghnf';
 
-if (!SILICONFLOW_API_KEY) {
-  console.error("SiliconFlow API configuration is missing. Please check your environment variables.");
-}
-
-const MODEL_ID = 'Qwen/Qwen2.5-7B-Instruct';
-const DEEP_MODEL_ID = 'Qwen/Qwen2.5-72B-Instruct';
-
-function buildPrompt(birthInfo: any, fateData: any): string {
+// 构建结构化提示词
+function buildStructuredPrompt(birthInfo: any, fateData: any, structuredAnalysis: any): string {
   return `
-用户信息:
-姓名: ${birthInfo.name || '未知'}
-性别: ${birthInfo.gender === 'male' ? '男' : '女'}
-出生日期: ${birthInfo.year}年${birthInfo.month}月${birthInfo.day}日 (${birthInfo.calendarType === 'solar' ? '公历' : '农历'})
-出生时间: ${birthInfo.hour}时${birthInfo.minute || 0}分
-出生地点: ${birthInfo.country} ${birthInfo.province} ${birthInfo.city}
+# 八字命盘结构化数据
 
-排盘数据摘要:
-${fateData.bazi ? `八字: ${JSON.stringify({
-  pillars: Object.entries(fateData.bazi.pillars).map(([k, v]: any) => `${k}:${v.gan}${v.zhi}`),
-  dayMaster: fateData.bazi.dayMaster,
-  fiveElements: fateData.bazi.fiveElements,
-  relations: fateData.bazi.relations.map((r: any) => r.description)
-})}` : ''}
-${fateData.ziwei ? `紫微斗数: ${JSON.stringify({
-  lifeMaster: fateData.ziwei.lifeMaster,
-  bodyMaster: fateData.ziwei.bodyMaster,
-  zodiac: fateData.ziwei.zodiac,
-  palaces: fateData.ziwei.palaces.map((p: any) => ({
-    name: p.name,
-    stars: [...p.majorStars.map((s: any) => s.name), ...p.minorStars.map((s: any) => s.name)]
-  }))
-})}` : ''}
-${fateData.western ? `西方星盘: ${JSON.stringify({
-  sunSign: fateData.western.sunSign,
-  aspects: fateData.western.aspects.map((a: any) => a.name)
-})}` : ''}
-${fateData.lifeNumerology ? `生命灵数: ${JSON.stringify(fateData.lifeNumerology)}` : ''}
-${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
-生肖: ${fateData.zodiac}
-星座: ${fateData.westernZodiac}
-  `;
+## 1. 基本信息
+- 姓名: ${birthInfo.name || '未知'}
+- 性别: ${birthInfo.gender === 'male' ? '男' : '女'}
+- 出生日期: ${birthInfo.year}年${birthInfo.month}月${birthInfo.day}日
+- 出生时间: ${birthInfo.hour}时${birthInfo.minute || 0}分
+- 当前年份: 2026年（请据此计算实际年龄）
+
+## 2. 四柱八字
+| 柱位 | 天干 | 地支 | 十神 |
+|------|------|------|------|
+| 年柱 | ${fateData.bazi.pillars.year.gan} | ${fateData.bazi.pillars.year.zhi} | ${fateData.bazi.pillars.year.tenGod} |
+| 月柱 | ${fateData.bazi.pillars.month.gan} | ${fateData.bazi.pillars.month.zhi} | ${fateData.bazi.pillars.month.tenGod} |
+| 日柱 | ${fateData.bazi.pillars.day.gan} | ${fateData.bazi.pillars.day.zhi} | 日主 |
+| 时柱 | ${fateData.bazi.pillars.hour.gan} | ${fateData.bazi.pillars.hour.zhi} | ${fateData.bazi.pillars.hour.tenGod} |
+
+## 3. 五行分析（已计算）
+| 五行 | 分数 | 占比 | 状态 |
+|------|------|------|------|
+| 木 | ${structuredAnalysis.fiveElements.scores['木']?.toFixed(1) || 0} | ${structuredAnalysis.fiveElements.percentages['木']?.toFixed(1) || 0}% | ${structuredAnalysis.fiveElements.dominant === '木' ? '最旺' : structuredAnalysis.fiveElements.weakest === '木' ? '最弱' : '正常'} |
+| 火 | ${structuredAnalysis.fiveElements.scores['火']?.toFixed(1) || 0} | ${structuredAnalysis.fiveElements.percentages['火']?.toFixed(1) || 0}% | ${structuredAnalysis.fiveElements.dominant === '火' ? '最旺' : structuredAnalysis.fiveElements.weakest === '火' ? '最弱' : '正常'} |
+| 土 | ${structuredAnalysis.fiveElements.scores['土']?.toFixed(1) || 0} | ${structuredAnalysis.fiveElements.percentages['土']?.toFixed(1) || 0}% | ${structuredAnalysis.fiveElements.dominant === '土' ? '最旺' : structuredAnalysis.fiveElements.weakest === '土' ? '最弱' : '正常'} |
+| 金 | ${structuredAnalysis.fiveElements.scores['金']?.toFixed(1) || 0} | ${structuredAnalysis.fiveElements.percentages['金']?.toFixed(1) || 0}% | ${structuredAnalysis.fiveElements.dominant === '金' ? '最旺' : structuredAnalysis.fiveElements.weakest === '金' ? '最弱' : '正常'} |
+| 水 | ${structuredAnalysis.fiveElements.scores['水']?.toFixed(1) || 0} | ${structuredAnalysis.fiveElements.percentages['水']?.toFixed(1) || 0}% | ${structuredAnalysis.fiveElements.dominant === '水' ? '最旺' : structuredAnalysis.fiveElements.weakest === '水' ? '最弱' : '正常'} |
+
+## 4. 日主强弱（已计算）
+- 日主: ${structuredAnalysis.dayMaster.gan}（${structuredAnalysis.dayMaster.element}）
+- 强弱等级: ${structuredAnalysis.strength.level}
+- 计算得分: ${structuredAnalysis.strength.score.toFixed(1)}
+- 判断依据: ${structuredAnalysis.strength.reason}
+
+## 5. 喜用神（已计算）
+- 用神: ${structuredAnalysis.xiYongShen.yongShen}（最需要）
+- 喜神: ${structuredAnalysis.xiYongShen.xiShen}（喜欢）
+- 忌神: ${structuredAnalysis.xiYongShen.jiShen}（忌讳）
+- 分析: ${structuredAnalysis.xiYongShen.reason}
+
+## 6. 格局（已计算）
+- 格局名称: ${structuredAnalysis.pattern.name}
+- 格局说明: ${structuredAnalysis.pattern.description}
+
+## 7. 关键关系
+${structuredAnalysis.relations.map((r: any) => `- ${r.type}: ${r.description}`).join('\n')}
+
+## 8. 紫微斗数概要
+- 命宫主星: ${fateData.ziwei?.lifeMaster || '未知'}
+- 身宫主星: ${fateData.ziwei?.bodyMaster || '未知'}
+- 生肖: ${fateData.ziwei?.zodiac || '未知'}
+
+## 9. 其他信息
+- 生命灵数: ${fateData.lifeNumerology?.lifePathNumber || '未知'}
+- MBTI: ${fateData.mbti?.type || '未知'}
+- 西方星座: ${fateData.westernZodiac || '未知'}
+`;
 }
 
-export async function getUnifiedInterpretation(birthInfo: any, fateData: any, depth: 'quick' | 'deep' = 'quick') {
-  const systemInstruction = `
+// 分步推理提示词
+const STEP_BY_STEP_PROMPT = `
 # 角色设定
-你是一位深耕命理领域10年以上的跨体系专业命理顾问，精通中国传统八字命理、紫微斗数、西方占星、生命灵数、人类图（Human Design）及印度吠陀占星（印占）等多个体系。你擅长多体系交叉验证，输出严谨、有深度、不浮夸的人生趋势分析报告。
-你的报告既要具备极强的专业命理支撑（如具体的星曜、神煞、相位、通道等），也要有贴合人生阶段的共情力。你强调「命理不是宿命，而是天气预报」，旨在帮助用户在关键节点做出最优选择。
+你是一位专业的八字命理分析师。我将为你提供已经计算好的结构化数据，请你基于这些数据进行解读和润色。
 
-# 输出规则与强制结构
-1. 开篇寄语：直接称呼用户（如：[姓名]先生/女士，你好）。结合其当前年龄和人生阶段（如：三十而立、不惑之年等），给出共情式的人生阶段总结，快速建立信任感。
-2. 核心结论摘要：
-   - **一句话定论**：用一个极具辨识度的人设标签概括用户的核心特质（如："打磨内在锋芒的奋斗者"）。
-   - **多体系交叉验证**：选取至少2个体系的依据（如八字+人类图）互相印证一个核心结论。
-   - **关键节点**：明确指出未来3-5年内最重要的转折年份及方向。
-   - **置信度声明**：诚实说明各体系数据的可靠程度（如：八字置信度高，星盘重在趋势指引）。
-3. 命运起伏（底层逻辑）：
-   - **核心证据**：提取八字日主、月令或星盘核心相位。
-   - **起伏逻辑**：简述过去3-5年的状态（复盘），并引出未来的转机（大运/流年更替）。
-4. 事业运势：
-   - **多体系映射**：结合紫微斗数主星和人类图通道，分析职业天赋。
-   - **具体建议**：适合的领域、岗位角色，以及沟通/决策中的避坑指南。
-5. 财运分析：
-   - **财富属性**：分析财星占比及财库情况，说明是正财还是偏财。
-   - **风险提示**：未来几年的财务波动预警及资产布局建议。
-6. 婚姻与家庭：
-   - **情感模式**：分析用户的择偶偏好与相处模式。
-   - **矛盾与落地建议**：指出潜在冲突点，并给出具体的沟通改善方案。
-7. 健康指引：
-   - **五行/星象反馈**：对应身体的薄弱环节。
-   - **调节建议**：具体的运动或生活方式建议。
-8. 未来5年逐年运势（2026-2031）：
-   - 结合流年、生命灵数个人年，给出每年的核心关键词和行动指南。
-9. 三大行动方案：
-   - 给出3条极其具体的、可操作的建议（职业优化、情绪管理、财务规划）。
-10. 大师寄语：
-    - 总结全篇，给予力量，强调平衡与个人成长。
+# 重要说明
+**你不需要重新计算五行、日主强弱、喜用神等，这些数据已经在"结构化数据"中提供。你的任务是基于这些计算结果进行专业解读。**
 
-# 话术与排版要求
-- 专业严谨：每一个结论都必须有对应的命理体系依据。
-- 通俗好懂：专业术语必须搭配通俗解释。
-- 排版精美：使用清晰的标题层级（H2, H3），段落之间保持充足空行。**禁止在正文中过度使用加粗（**符号）**，仅在极少数核心关键词上使用。
-- 篇幅：深度报告控制在1200-1800字。
-  `;
+# 分析步骤（请按此顺序）
 
-  const userPrompt = buildPrompt(birthInfo, fateData);
+## Step 1: 日主分析
+基于提供的"日主强弱"和"喜用神"数据，分析：
+- 日主${'{'}dayMaster{'}'}的特质
+- 为什么日主是${'{'}strength.level{'}'}（引用计算得分）
+- 喜用神如何影响命主的人生
+
+## Step 2: 性格分析
+基于日主、十神配置和格局，分析：
+- 核心性格特质
+- 优点和缺点
+- 与他人的相处模式
+
+## Step 3: 事业财运
+基于喜用神、格局和十神，分析：
+- 适合的行业和职业
+- 财运特点（正财/偏财）
+- 事业发展建议
+
+## Step 4: 感情婚姻
+基于日支（夫妻宫）和十神，分析：
+- 感情模式
+- 择偶倾向
+- 婚姻建议
+
+## Step 5: 健康提示
+基于五行分布，分析：
+- 需要注意的身体部位
+- 养生建议
+
+## Step 6: 未来5年运势（2026-2031）
+结合当前大运和流年，给出每年的：
+- 关键词
+- 注意事项
+- 行动建议
+
+# 输出要求
+- 使用专业但易懂的语言
+- 每个结论都要引用结构化数据作为依据
+- 禁止编造数据，所有分析必须基于提供的结构化数据
+- 格式清晰，使用标题和列表
+`;
+
+export async function getUnifiedInterpretation(
+  birthInfo: any, 
+  fateData: any, 
+  structuredAnalysis: any,
+  depth: 'quick' | 'deep' = 'quick'
+) {
+  const structuredData = buildStructuredPrompt(birthInfo, fateData, structuredAnalysis);
+  
+  const prompt = `${STEP_BY_STEP_PROMPT}\n\n${structuredData}\n\n请按照上述步骤进行分析，生成${depth === 'deep' ? '详细' : '简洁'}的命理报告。`;
 
   try {
-    const response = await fetch(`${SILICONFLOW_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${ARK_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
+        'Authorization': `Bearer ${ARK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID,
+        model: MODEL_ID,
         messages: [
-          { role: 'system', content: systemInstruction },
-          { role: 'user', content: userPrompt }
+          { role: 'system', content: '你是专业的八字命理分析师，基于结构化数据进行解读。' },
+          { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: depth === 'deep' ? 4000 : 1500,
+        max_tokens: depth === 'deep' ? 4000 : 2000,
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("SiliconFlow API Error:", error);
+      console.error("Ark API Error:", error);
       return "抱歉，AI 解读暂时无法生成。请稍后再试。";
     }
 
@@ -121,51 +157,27 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
   }
 }
 
+// 聊天功能 - 也使用结构化数据
 export async function chatWithMaster(
   birthInfo: any, 
   fateData: any, 
+  structuredAnalysis: any,
   history: { role: 'user' | 'model'; text: string }[], 
   message: string
 ) {
-  const systemInstruction = `
-你是一位深耕命理领域10年以上的跨体系专业命理顾问，精通中国传统八字命理、紫微斗数、西方占星、生命灵数、人类图及印占等多个体系。
-你的回答既要具备极强的专业命理支撑，也要有贴合人生阶段的共情力，强调「命理为指引，人为核心」的底层逻辑。
-请结合用户的出生信息和排盘数据回答他们的问题。
+  const structuredData = buildStructuredPrompt(birthInfo, fateData, structuredAnalysis);
+  
+  const systemPrompt = `
+你是专业的八字命理分析师。以下是用户的命盘结构化数据（已计算）：
 
-用户信息:
-姓名: ${birthInfo.name || '未知'}
-性别: ${birthInfo.gender === 'male' ? '男' : '女'}
-出生日期: ${birthInfo.year}年${birthInfo.month}月${birthInfo.day}日
+${structuredData}
 
-排盘数据摘要:
-${fateData.bazi ? `八字: ${JSON.stringify({
-  pillars: Object.entries(fateData.bazi.pillars).map(([k, v]: any) => `${k}:${v.gan}${v.zhi}`),
-  dayMaster: fateData.bazi.dayMaster,
-  fiveElements: fateData.bazi.fiveElements,
-  relations: fateData.bazi.relations.map((r: any) => r.description)
-})}` : ''}
-${fateData.ziwei ? `紫微斗数: ${JSON.stringify({
-  lifeMaster: fateData.ziwei.lifeMaster,
-  bodyMaster: fateData.ziwei.bodyMaster,
-  zodiac: fateData.ziwei.zodiac,
-  palaces: fateData.ziwei.palaces.map((p: any) => ({
-    name: p.name,
-    stars: [...p.majorStars.map((s: any) => s.name), ...p.minorStars.map((s: any) => s.name)]
-  }))
-})}` : ''}
-${fateData.western ? `西方星盘: ${JSON.stringify({
-  sunSign: fateData.western.sunSign,
-  aspects: fateData.western.aspects.map((a: any) => a.name)
-})}` : ''}
-${fateData.lifeNumerology ? `生命灵数: ${JSON.stringify(fateData.lifeNumerology)}` : ''}
-${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
-
-请保持专业、沉稳、真诚、有落地性的语气。
-  `;
+请基于以上数据回答用户的问题。不要编造数据，所有回答必须基于提供的结构化信息。
+`;
 
   try {
     const messages = [
-      { role: 'system', content: systemInstruction },
+      { role: 'system', content: systemPrompt },
       ...history.map(m => ({
         role: m.role === 'model' ? 'assistant' : 'user',
         content: m.text
@@ -173,23 +185,23 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
       { role: 'user', content: message }
     ];
 
-    const response = await fetch(`${SILICONFLOW_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${ARK_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
+        'Authorization': `Bearer ${ARK_API_KEY}`,
       },
       body: JSON.stringify({
         model: MODEL_ID,
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1000,
+        max_tokens: 1500,
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("SiliconFlow API Error:", error);
+      console.error("Ark API Error:", error);
       return "抱歉，大师现在有点忙，请稍后再问。";
     }
 

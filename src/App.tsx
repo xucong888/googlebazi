@@ -36,6 +36,7 @@ import {
   calculateZiwei,
   calculateWesternAstrology,
   calculateLifeNumerology,
+  getStructuredAnalysis,
   BaziData,
   ZiweiData
 } from './services/fateEngine';
@@ -484,7 +485,9 @@ export default function App() {
     }, 500);
 
     try {
-      const report = await getUnifiedInterpretation(birthInfo, fateData, aiDepth);
+      // 计算结构化分析数据
+      const structuredAnalysis = fateData.bazi ? getStructuredAnalysis(fateData.bazi) : null;
+      const report = await getUnifiedInterpretation(birthInfo, fateData, structuredAnalysis, aiDepth);
       setAiReport(report);
       setAiProgress(100);
     } finally {
@@ -514,7 +517,9 @@ export default function App() {
     // 扣除积分
     setPoints(prev => prev - CHAT_COST);
     
-    const response = await chatWithMaster(birthInfo, fateData, chatMessages, userMessage);
+    // 计算结构化分析数据
+    const structuredAnalysis = fateData.bazi ? getStructuredAnalysis(fateData.bazi) : null;
+    const response = await chatWithMaster(birthInfo, fateData, structuredAnalysis, chatMessages, userMessage);
     setChatMessages(prev => [...prev, { role: 'model', text: response }]);
     setIsSendingChat(false);
   };
