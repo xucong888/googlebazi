@@ -1,13 +1,12 @@
-// Kimi AI Service
-const KIMI_API_KEY = import.meta.env.VITE_KIMI_API_KEY;
-const KIMI_BASE_URL = 'https://api.moonshot.cn/v1';
+// 火山方舟 AI Service
+const ARK_API_KEY = import.meta.env.VITE_ARK_API_KEY;
+const ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
 
-if (!KIMI_API_KEY) {
-  console.error("Kimi API configuration is missing. Please check your environment variables.");
+if (!ARK_API_KEY) {
+  console.error("Ark API configuration is missing. Please check your environment variables.");
 }
 
-const MODEL_ID = 'moonshot-v1-8k';
-const DEEP_MODEL_ID = 'moonshot-v1-32k';
+const MODEL_ID = 'ep-20260326101147-6hrzr';
 
 function buildPrompt(birthInfo: any, fateData: any): string {
   return `
@@ -90,14 +89,14 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
   const userPrompt = buildPrompt(birthInfo, fateData);
 
   try {
-    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${ARK_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${KIMI_API_KEY}`,
+        'Authorization': `Bearer ${ARK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID,
+        model: MODEL_ID,
         messages: [
           { role: 'system', content: systemInstruction },
           { role: 'user', content: userPrompt }
@@ -109,7 +108,7 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Kimi API Error:", error);
+      console.error("Ark API Error:", error);
       return "抱歉，AI 解读暂时无法生成。请稍后再试。";
     }
 
@@ -173,11 +172,11 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
       { role: 'user', content: message }
     ];
 
-    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${ARK_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${KIMI_API_KEY}`,
+        'Authorization': `Bearer ${ARK_API_KEY}`,
       },
       body: JSON.stringify({
         model: MODEL_ID,
@@ -189,7 +188,7 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Kimi API Error:", error);
+      console.error("Ark API Error:", error);
       return "抱歉，大师现在有点忙，请稍后再问。";
     }
 
