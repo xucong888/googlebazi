@@ -1,6 +1,6 @@
-// 火山方舟 AI Service
+// 火山方舟 AI Service - 通过 Vercel Edge Function 代理
 const ARK_API_KEY = import.meta.env.VITE_ARK_API_KEY;
-const ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
+const ARK_BASE_URL = '/api/ai'; // 调用同域代理 API
 
 if (!ARK_API_KEY) {
   console.error("Ark API configuration is missing. Please check your environment variables.");
