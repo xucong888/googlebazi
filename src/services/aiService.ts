@@ -1,13 +1,13 @@
-// Gemini AI Service
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+// Kimi AI Service
+const KIMI_API_KEY = import.meta.env.VITE_KIMI_API_KEY;
+const KIMI_BASE_URL = 'https://api.moonshot.cn/v1';
 
-if (!GEMINI_API_KEY) {
-  console.error("Gemini API configuration is missing. Please check your environment variables.");
+if (!KIMI_API_KEY) {
+  console.error("Kimi API configuration is missing. Please check your environment variables.");
 }
 
-const MODEL_ID = 'gemini-2.0-flash';
-const DEEP_MODEL_ID = 'gemini-2.0-flash';
+const MODEL_ID = 'moonshot-v1-8k';
+const DEEP_MODEL_ID = 'moonshot-v1-32k';
 
 function buildPrompt(birthInfo: any, fateData: any): string {
   return `
@@ -90,30 +90,31 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
   const userPrompt = buildPrompt(birthInfo, fateData);
 
   try {
-    const response = await fetch(`${GEMINI_BASE_URL}/${depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID}:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${KIMI_API_KEY}`,
       },
       body: JSON.stringify({
-        contents: [
-          { role: 'user', parts: [{ text: systemInstruction + '\n\n' + userPrompt }] }
+        model: depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID,
+        messages: [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: userPrompt }
         ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: depth === 'deep' ? 4000 : 1500,
-        },
+        temperature: 0.7,
+        max_tokens: depth === 'deep' ? 4000 : 1500,
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Gemini API Error:", error);
+      console.error("Kimi API Error:", error);
       return "抱歉，AI 解读暂时无法生成。请稍后再试。";
     }
 
     const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
+    return data.choices[0].message.content;
   } catch (error: any) {
     console.error("AI Interpretation Error:", error?.message || String(error));
     return "抱歉，AI 解读暂时无法生成。请稍后再试。";
@@ -163,37 +164,37 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
   `;
 
   try {
-    const contents = [
-      { role: 'user', parts: [{ text: systemInstruction }] },
+    const messages = [
+      { role: 'system', content: systemInstruction },
       ...history.map(m => ({
-        role: m.role === 'model' ? 'model' : 'user',
-        parts: [{ text: m.text }]
+        role: m.role === 'model' ? 'assistant' : 'user',
+        content: m.text
       })),
-      { role: 'user', parts: [{ text: message }] }
+      { role: 'user', content: message }
     ];
 
-    const response = await fetch(`${GEMINI_BASE_URL}/${MODEL_ID}:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${KIMI_API_KEY}`,
       },
       body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1000,
-        },
+        model: MODEL_ID,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1000,
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Gemini API Error:", error);
+      console.error("Kimi API Error:", error);
       return "抱歉，大师现在有点忙，请稍后再问。";
     }
 
     const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
+    return data.choices[0].message.content;
   } catch (error: any) {
     console.error("AI Chat Error:", error?.message || String(error));
     return "抱歉，大师现在有点忙，请稍后再问。";
