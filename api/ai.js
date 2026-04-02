@@ -1,9 +1,5 @@
 // Vercel Edge Function - 代理火山方舟 API
-export const config = {
-  runtime: 'edge',
-};
-
-export default async function handler(request: Request) {
+export default async function handler(request) {
   // 设置 CORS 头
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -23,13 +19,21 @@ export default async function handler(request: Request) {
 
   try {
     const body = await request.json();
+    const apiKey = process.env.VITE_ARK_API_KEY;
+    
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'API key not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     // 调用火山方舟 API
     const response = await fetch('https://ark.cn-beijing.volces.com/api/v3/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.VITE_ARK_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
     });
@@ -37,7 +41,7 @@ export default async function handler(request: Request) {
     const data = await response.json();
 
     return new Response(JSON.stringify(data), {
-      status: 200,
+      status: response.status,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json',
