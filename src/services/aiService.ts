@@ -1,13 +1,49 @@
-// Kimi AI Service
-const KIMI_API_KEY = import.meta.env.VITE_KIMI_API_KEY;
-const KIMI_BASE_URL = 'https://api.moonshot.cn/v1';
+// Gemini AI Service
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-if (!KIMI_API_KEY) {
-  console.error("Kimi API configuration is missing. Please check your environment variables.");
+if (!GEMINI_API_KEY) {
+  console.error("Gemini API configuration is missing. Please check your environment variables.");
 }
 
-const MODEL_ID = 'moonshot-v1-8k';
-const DEEP_MODEL_ID = 'moonshot-v1-32k';
+const MODEL_ID = 'gemini-2.0-flash';
+const DEEP_MODEL_ID = 'gemini-2.0-flash';
+
+function buildPrompt(birthInfo: any, fateData: any): string {
+  return `
+用户信息:
+姓名: ${birthInfo.name || '未知'}
+性别: ${birthInfo.gender === 'male' ? '男' : '女'}
+出生日期: ${birthInfo.year}年${birthInfo.month}月${birthInfo.day}日 (${birthInfo.calendarType === 'solar' ? '公历' : '农历'})
+出生时间: ${birthInfo.hour}时${birthInfo.minute || 0}分
+出生地点: ${birthInfo.country} ${birthInfo.province} ${birthInfo.city}
+
+排盘数据摘要:
+${fateData.bazi ? `八字: ${JSON.stringify({
+  pillars: Object.entries(fateData.bazi.pillars).map(([k, v]: any) => `${k}:${v.gan}${v.zhi}`),
+  dayMaster: fateData.bazi.dayMaster,
+  fiveElements: fateData.bazi.fiveElements,
+  relations: fateData.bazi.relations.map((r: any) => r.description)
+})}` : ''}
+${fateData.ziwei ? `紫微斗数: ${JSON.stringify({
+  lifeMaster: fateData.ziwei.lifeMaster,
+  bodyMaster: fateData.ziwei.bodyMaster,
+  zodiac: fateData.ziwei.zodiac,
+  palaces: fateData.ziwei.palaces.map((p: any) => ({
+    name: p.name,
+    stars: [...p.majorStars.map((s: any) => s.name), ...p.minorStars.map((s: any) => s.name)]
+  }))
+})}` : ''}
+${fateData.western ? `西方星盘: ${JSON.stringify({
+  sunSign: fateData.western.sunSign,
+  aspects: fateData.western.aspects.map((a: any) => a.name)
+})}` : ''}
+${fateData.lifeNumerology ? `生命灵数: ${JSON.stringify(fateData.lifeNumerology)}` : ''}
+${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
+生肖: ${fateData.zodiac}
+星座: ${fateData.westernZodiac}
+  `;
+}
 
 export async function getUnifiedInterpretation(birthInfo: any, fateData: any, depth: 'quick' | 'deep' = 'quick') {
   const systemInstruction = `
@@ -51,72 +87,33 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
 - 篇幅：深度报告控制在1200-1800字。
   `;
 
-  const prompt = `
-    ${systemInstruction}
-
-    请根据以下用户出生信息和排盘数据，提供一个${depth === 'deep' ? '极其详尽、深度' : '精炼、直击要点的'}跨体系交叉验证的命理分析报告。
-    
-    用户信息:
-    姓名: ${birthInfo.name || '未知'}
-    性别: ${birthInfo.gender === 'male' ? '男' : '女'}
-    出生日期: ${birthInfo.year}年${birthInfo.month}月${birthInfo.day}日 (${birthInfo.calendarType === 'solar' ? '公历' : '农历'})
-    出生时间: ${birthInfo.hour}时${birthInfo.minute || 0}分
-    出生地点: ${birthInfo.country} ${birthInfo.province} ${birthInfo.city}
-    
-    排盘数据摘要:
-    ${fateData.bazi ? `八字: ${JSON.stringify({
-      pillars: Object.entries(fateData.bazi.pillars).map(([k, v]: any) => `${k}:${v.gan}${v.zhi}`),
-      dayMaster: fateData.bazi.dayMaster,
-      fiveElements: fateData.bazi.fiveElements,
-      relations: fateData.bazi.relations.map((r: any) => r.description)
-    })}` : ''}
-    ${fateData.ziwei ? `紫微斗数: ${JSON.stringify({
-      lifeMaster: fateData.ziwei.lifeMaster,
-      bodyMaster: fateData.ziwei.bodyMaster,
-      zodiac: fateData.ziwei.zodiac,
-      palaces: fateData.ziwei.palaces.map((p: any) => ({
-        name: p.name,
-        stars: [...p.majorStars.map((s: any) => s.name), ...p.minorStars.map((s: any) => s.name)]
-      }))
-    })}` : ''}
-    ${fateData.western ? `西方星盘: ${JSON.stringify({
-      sunSign: fateData.western.sunSign,
-      aspects: fateData.western.aspects.map((a: any) => a.name)
-    })}` : ''}
-    ${fateData.lifeNumerology ? `生命灵数: ${JSON.stringify(fateData.lifeNumerology)}` : ''}
-    ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
-    生肖: ${fateData.zodiac}
-    星座: ${fateData.westernZodiac}
-    
-    请严格按照上述"输出规则与强制结构"进行输出。
-  `;
+  const userPrompt = buildPrompt(birthInfo, fateData);
 
   try {
-    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${GEMINI_BASE_URL}/${depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID}:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${KIMI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID,
-        messages: [
-          { role: 'system', content: systemInstruction },
-          { role: 'user', content: prompt }
+        contents: [
+          { role: 'user', parts: [{ text: systemInstruction + '\n\n' + userPrompt }] }
         ],
-        temperature: 0.7,
-        max_tokens: depth === 'deep' ? 4000 : 1500,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: depth === 'deep' ? 4000 : 1500,
+        },
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Kimi API Error:", error);
+      console.error("Gemini API Error:", error);
       return "抱歉，AI 解读暂时无法生成。请稍后再试。";
     }
 
     const data = await response.json();
-    return data.choices[0].message.content;
+    return data.candidates[0].content.parts[0].text;
   } catch (error: any) {
     console.error("AI Interpretation Error:", error?.message || String(error));
     return "抱歉，AI 解读暂时无法生成。请稍后再试。";
@@ -166,37 +163,37 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
   `;
 
   try {
-    const messages = [
-      { role: 'system', content: systemInstruction },
+    const contents = [
+      { role: 'user', parts: [{ text: systemInstruction }] },
       ...history.map(m => ({
-        role: m.role === 'model' ? 'assistant' : 'user',
-        content: m.text
+        role: m.role === 'model' ? 'model' : 'user',
+        parts: [{ text: m.text }]
       })),
-      { role: 'user', content: message }
+      { role: 'user', parts: [{ text: message }] }
     ];
 
-    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${GEMINI_BASE_URL}/${MODEL_ID}:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${KIMI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: MODEL_ID,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000,
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1000,
+        },
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Kimi API Error:", error);
+      console.error("Gemini API Error:", error);
       return "抱歉，大师现在有点忙，请稍后再问。";
     }
 
     const data = await response.json();
-    return data.choices[0].message.content;
+    return data.candidates[0].content.parts[0].text;
   } catch (error: any) {
     console.error("AI Chat Error:", error?.message || String(error));
     return "抱歉，大师现在有点忙，请稍后再问。";
