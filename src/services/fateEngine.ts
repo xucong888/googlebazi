@@ -335,36 +335,92 @@ function calculateRelations(stems: string[], branches: string[]): BaziRelation[]
   return uniqueRelations;
 }
 
+// 地支藏干权重表（本气、中气、余气）
+const ZHI_HIDE_GAN_WEIGHT: Record<string, { gan: string; weight: number }[]> = {
+  '子': [{ gan: '癸', weight: 1.0 }],
+  '丑': [{ gan: '己', weight: 0.6 }, { gan: '癸', weight: 0.3 }, { gan: '辛', weight: 0.1 }],
+  '寅': [{ gan: '甲', weight: 0.6 }, { gan: '丙', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
+  '卯': [{ gan: '乙', weight: 1.0 }],
+  '辰': [{ gan: '戊', weight: 0.6 }, { gan: '乙', weight: 0.3 }, { gan: '癸', weight: 0.1 }],
+  '巳': [{ gan: '丙', weight: 0.6 }, { gan: '庚', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
+  '午': [{ gan: '丁', weight: 0.7 }, { gan: '己', weight: 0.3 }],
+  '未': [{ gan: '己', weight: 0.6 }, { gan: '丁', weight: 0.3 }, { gan: '乙', weight: 0.1 }],
+  '申': [{ gan: '庚', weight: 0.6 }, { gan: '壬', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
+  '酉': [{ gan: '辛', weight: 1.0 }],
+  '戌': [{ gan: '戊', weight: 0.6 }, { gan: '辛', weight: 0.3 }, { gan: '丁', weight: 0.1 }],
+  '亥': [{ gan: '壬', weight: 0.7 }, { gan: '甲', weight: 0.3 }],
+};
+
+// 天干五行映射
+const GAN_ELEMENT: Record<string, string> = {
+  '甲': '木', '乙': '木',
+  '丙': '火', '丁': '火',
+  '戊': '土', '己': '土',
+  '庚': '金', '辛': '金',
+  '壬': '水', '癸': '水',
+};
+
 function calculateFiveElements(eightChar: any): BaziData['fiveElements'] {
   const elements = { '木': 0, '火': 0, '土': 0, '金': 0, '水': 0 };
   
-  const chars = [
+  // 1. 计算天干（年干、月干、日干、时干）- 各算 1.0 权重
+  const gans = [
     eightChar.getYearGan(),
-    eightChar.getYearZhi(),
     eightChar.getMonthGan(),
-    eightChar.getMonthZhi(),
     eightChar.getDayGan(),
-    eightChar.getDayZhi(),
     eightChar.getTimeGan(),
-    eightChar.getTimeZhi()
   ];
   
-  chars.forEach(c => {
-    const el = getElement(c);
-    if (el) elements[el as keyof typeof elements] += 1;
+  gans.forEach(gan => {
+    const el = GAN_ELEMENT[gan];
+    if (el) elements[el as keyof typeof elements] += 1.0;
   });
-
+  
+  // 2. 计算地支藏干（带权重）
+  const zhis = [
+    { zhi: eightChar.getYearZhi(), position: 'year' },
+    { zhi: eightChar.getMonthZhi(), position: 'month' }, // 月令权重更高
+    { zhi: eightChar.getDayZhi(), position: 'day' },
+    { zhi: eightChar.getTimeZhi(), position: 'time' },
+  ];
+  
+  zhis.forEach(({ zhi, position }) => {
+    const hideGans = ZHI_HIDE_GAN_WEIGHT[zhi];
+    if (!hideGans) return;
+    
+    // 月令（月支）权重加成
+    const positionMultiplier = position === 'month' ? 1.5 : 1.0;
+    
+    hideGans.forEach(({ gan, weight }) => {
+      const el = GAN_ELEMENT[gan];
+      if (el) {
+        // 地支藏干权重 = 藏干本身权重 × 位置权重
+        elements[el as keyof typeof elements] += weight * positionMultiplier;
+      }
+    });
+  });
+  
+  // 3. 计算百分比
+  const total = Object.values(elements).reduce((sum, val) => sum + val, 0);
   const result: any = {};
-  Object.entries(elements).forEach(([el, count]) => {
-    const percentage = (count / 8) * 100;
+  
+  Object.entries(elements).forEach(([el, score]) => {
+    const percentage = total > 0 ? (score / total) * 100 : 0;
+    
+    // 判断强弱
     let strength = '中庸';
-    if (count === 0) strength = '极弱';
-    else if (count === 1) strength = '偏弱';
-    else if (count === 2) strength = '中庸';
-    else if (count === 3) strength = '偏强';
+    if (percentage === 0) strength = '极弱';
+    else if (percentage < 10) strength = '偏弱';
+    else if (percentage < 20) strength = '略弱';
+    else if (percentage < 30) strength = '中庸';
+    else if (percentage < 40) strength = '略强';
     else strength = '极强';
     
-    result[el] = { percentage, strength, count };
+    result[el] = {
+      percentage: Math.round(percentage * 10) / 10,
+      strength,
+      count: Math.round(score * 10) / 10,
+    };
   });
 
   return result;

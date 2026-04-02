@@ -466,8 +466,11 @@ export default function App() {
   };
 
   const unlockAiInterpretation = async () => {
-    const cost = aiDepth === 'deep' ? 50 : 10;
-    if (points < cost) return;
+    const cost = aiDepth === 'deep' ? 100 : 20;  // 深度 100，快速 20
+    if (points < cost) {
+      alert(`积分不足，需要 ${cost} 积分，当前 ${points} 积分`);
+      return;
+    }
     setIsUnlockingAi(true);
     setAiProgress(0);
     setPoints(prev => prev - cost);
@@ -496,10 +499,20 @@ export default function App() {
   const handleChat = async () => {
     if (!chatInput.trim() || isSendingChat) return;
     
+    // 检查积分
+    const CHAT_COST = 10;
+    if (points < CHAT_COST) {
+      alert(`积分不足，需要 ${CHAT_COST} 积分，当前 ${points} 积分`);
+      return;
+    }
+    
     const userMessage = chatInput.trim();
     setChatInput('');
     setChatMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsSendingChat(true);
+    
+    // 扣除积分
+    setPoints(prev => prev - CHAT_COST);
     
     const response = await chatWithMaster(birthInfo, fateData, chatMessages, userMessage);
     setChatMessages(prev => [...prev, { role: 'model', text: response }]);
@@ -1712,7 +1725,7 @@ export default function App() {
                       ) : (
                         <div className="relative flex items-center gap-3 z-20">
                           <Sparkles className="w-5 h-5 group-hover:animate-pulse" />
-                          <span className="text-white font-semibold tracking-wide">立马开启测算 ({aiDepth === 'deep' ? '50' : '10'}积分)</span>
+                          <span className="text-white font-semibold tracking-wide">立马开启测算 ({aiDepth === 'deep' ? '100' : '20'}积分)</span>
                         </div>
                       )}
                       

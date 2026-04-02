@@ -1,20 +1,13 @@
-import OpenAI from "openai";
+// Kimi AI Service
+const KIMI_API_KEY = import.meta.env.VITE_KIMI_API_KEY;
+const KIMI_BASE_URL = 'https://api.moonshot.cn/v1';
 
-const apiKey = import.meta.env.VITE_VOLC_API_KEY;
-const baseURL = import.meta.env.VITE_VOLC_API_ENDPOINT;
-const modelId = import.meta.env.VITE_VOLC_MODEL_ID;
-
-if (!apiKey || !baseURL || !modelId) {
-  console.error("Volcano Engine API configuration is missing. Please check your environment variables.");
+if (!KIMI_API_KEY) {
+  console.error("Kimi API configuration is missing. Please check your environment variables.");
 }
 
-const openai = new OpenAI({
-  apiKey: apiKey, // Removed '|| "placeholder"' to fail fast if key is missing
-  baseURL: baseURL,
-  dangerouslyAllowBrowser: true,
-});
-
-const MODEL_ID = modelId; // Removed '|| "placeholder"'
+const MODEL_ID = 'moonshot-v1-8k';
+const DEEP_MODEL_ID = 'moonshot-v1-32k';
 
 export async function getUnifiedInterpretation(birthInfo: any, fateData: any, depth: 'quick' | 'deep' = 'quick') {
   const systemInstruction = `
@@ -25,7 +18,7 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
 # 输出规则与强制结构
 1. 开篇寄语：直接称呼用户（如：[姓名]先生/女士，你好）。结合其当前年龄和人生阶段（如：三十而立、不惑之年等），给出共情式的人生阶段总结，快速建立信任感。
 2. 核心结论摘要：
-   - **一句话定论**：用一个极具辨识度的人设标签概括用户的核心特质（如：“打磨内在锋芒的奋斗者”）。
+   - **一句话定论**：用一个极具辨识度的人设标签概括用户的核心特质（如："打磨内在锋芒的奋斗者"）。
    - **多体系交叉验证**：选取至少2个体系的依据（如八字+人类图）互相印证一个核心结论。
    - **关键节点**：明确指出未来3-5年内最重要的转折年份及方向。
    - **置信度声明**：诚实说明各体系数据的可靠程度（如：八字置信度高，星盘重在趋势指引）。
@@ -95,15 +88,35 @@ export async function getUnifiedInterpretation(birthInfo: any, fateData: any, de
     生肖: ${fateData.zodiac}
     星座: ${fateData.westernZodiac}
     
-    请严格按照上述“输出规则与强制结构”进行输出。
+    请严格按照上述"输出规则与强制结构"进行输出。
   `;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: MODEL_ID,
-      messages: [{ role: "user", content: prompt }],
+    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${KIMI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: depth === 'deep' ? DEEP_MODEL_ID : MODEL_ID,
+        messages: [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: depth === 'deep' ? 4000 : 1500,
+      }),
     });
-    return response.choices[0].message.content;
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Kimi API Error:", error);
+      return "抱歉，AI 解读暂时无法生成。请稍后再试。";
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   } catch (error: any) {
     console.error("AI Interpretation Error:", error?.message || String(error));
     return "抱歉，AI 解读暂时无法生成。请稍后再试。";
@@ -154,19 +167,36 @@ ${fateData.mbti ? `MBTI: ${JSON.stringify(fateData.mbti)}` : ''}
 
   try {
     const messages = [
-      { role: "system", content: systemInstruction },
+      { role: 'system', content: systemInstruction },
       ...history.map(m => ({
         role: m.role === 'model' ? 'assistant' : 'user',
         content: m.text
       })),
-      { role: "user", content: message }
+      { role: 'user', content: message }
     ];
 
-    const response = await openai.chat.completions.create({
-      model: MODEL_ID,
-      messages: messages as any,
+    const response = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${KIMI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL_ID,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1000,
+      }),
     });
-    return response.choices[0].message.content;
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Kimi API Error:", error);
+      return "抱歉，大师现在有点忙，请稍后再问。";
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   } catch (error: any) {
     console.error("AI Chat Error:", error?.message || String(error));
     return "抱歉，大师现在有点忙，请稍后再问。";
