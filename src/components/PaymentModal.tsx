@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, CheckCircle } from 'lucide-react';
 import { POINT_PACKAGES, MEMBERSHIP_PACKAGES } from '../points';
-import { auth } from '../../firebase';
+import { auth, db } from '../firebase';
 
 interface PaymentModalProps {
   isOpen: boolean;

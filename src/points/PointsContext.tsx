@@ -235,15 +235,15 @@ export const PointsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // 检查今天是否已签到
     if (lastCheckIn) {
+      // 检查今天是否已签到
       const lastDate = new Date(lastCheckIn);
-      if (
-        lastDate.getFullYear() === now.getFullYear() &amp;&amp;
-        lastDate.getMonth() === now.getMonth() &amp;&amp;
-        lastDate.getDate() === now.getDate()
-      ) {
+      const isSameYear = lastDate.getFullYear() === now.getFullYear();
+      const isSameMonth = lastDate.getMonth() === now.getMonth();
+      const isSameDay = lastDate.getDate() === now.getDate();
+      
+      if (isSameYear && isSameMonth && isSameDay) {
         return { success: false, message: '今日已签到，明天再来吧' };
-      }
-    }
+      }    }
 
     // 计算连续签到奖励
     let bonusPoints = FREE_POINTS.DAILY_CHECKIN;
