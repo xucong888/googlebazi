@@ -27,7 +27,8 @@ import {
   ArrowRight,
   Plus,
   Globe,
-  User
+  User,
+  Wallet
 } from 'lucide-react';
 import { 
   calculateBazi, 
@@ -48,6 +49,9 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import ReactMarkdown from 'react-markdown';
 import { SYSTEMS, YEARS } from './constants/fateData';
+import { usePoints, PointsProvider } from './points';
+import { LoginModal } from './auth/LoginModal';
+import { PaymentModal } from './components/PaymentModal';
 import { Country, State, City } from 'country-state-city';
 
 function cn(...inputs: ClassValue[]) {
@@ -125,9 +129,16 @@ export default function App() {
   const [history, setHistory] = useState<any[]>([]);
   const [points, setPoints] = useState(100);
   const [selectedSystems, setSelectedSystems] = useState<string[]>(['bazi']);
-  const [isAuthReady, setIsAuthReady] = useState(false); // Placeholder for auth readiness
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [calcError, setCalcError] = useState<string | null>(null);
   const [selectedPalace, setSelectedPalace] = useState<number | null>(null);
+  
+  // 登录和支付弹窗
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  
+  // 使用积分系统
+  const { points: userPoints, refreshPoints } = usePoints();
   
   const [birthInfo, setBirthInfo] = useState({
     name: '徐聪',
@@ -565,18 +576,28 @@ export default function App() {
             </div>
             <div className="h-4 w-[1px] bg-paper-200" />
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-[11px] font-bold text-ink-900">
-                <span>积分: {points}</span>
-                <button 
-                  onClick={() => {
-                    setPoints(prev => prev + 10);
-                    setShowSuccessToast(true);
-                  }}
-                  className="text-gold-600 hover:text-gold-700 transition-colors ml-2"
-                >
-                  签到 +10
-                </button>
-              </div>
+              {/* 积分显示 */}
+              {isLoggedIn ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full">
+                  <Coins size={14} className="text-amber-600" />
+                  <span className="text-xs font-bold text-amber-700">{userPoints}</span>
+                  <button 
+                    onClick={() => setShowPaymentModal(true)}
+                    className="ml-1 text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded-full hover:bg-amber-700 transition-colors"
+                  >
+                    充值
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-full">
+                  <Coins size={14} className="text-gray-400" />
+                  <span className="text-xs text-gray-500">登录查看积分</span>
+                </div>
+              )}
+              
+              <div className="h-4 w-[1px] bg-paper-200" />
+              
+              {/* 用户登录状态 */}
               {isLoggedIn && user ? (
                 <div className="flex items-center gap-3">
                   <div className="text-right hidden sm:block">
@@ -599,10 +620,11 @@ export default function App() {
                 </div>
               ) : (
                 <button 
-                  onClick={handleLogin}
-                  className="w-10 h-10 rounded-full border border-paper-200 flex items-center justify-center text-ink-400 hover:border-ink-900 hover:text-ink-900 transition-all"
+                  onClick={() => setShowLoginModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-xs font-medium rounded-full hover:bg-gray-800 transition-colors"
                 >
-                  <User size={20} />
+                  <User size={14} />
+                  登录
                 </button>
               )}
             </div>
@@ -1975,6 +1997,27 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 登录弹窗 */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onSuccess={() => {
+          setShowLoginModal(false);
+          refreshPoints();
+        }}
+      />
+
+      {/* 支付弹窗 */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={(amount) => {
+          setShowPaymentModal(false);
+          refreshPoints();
+          setShowSuccessToast(true);
+        }}
+      />
     </div>
     </ErrorBoundary>
   );
