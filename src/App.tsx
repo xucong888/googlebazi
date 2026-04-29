@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Component, ReactNode } from 'react';
+import React, { useState, useEffect, useRef, Component, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
@@ -7,9 +7,8 @@ import {
   MapPin, 
   ChevronRight, 
   LayoutDashboard, 
-  Zap, 
-  Moon, 
-  Sun,
+  Zap,
+  Moon,
   Info,
   Share2,
   Download,
@@ -43,8 +42,8 @@ import {
 } from './services/fateEngine';
 import { Lunar, Solar, LunarYear } from 'lunar-javascript';
 import { getUnifiedInterpretation, chatWithMaster } from './services/aiService';
-import { auth, loginWithGoogle, logout, saveFateRecord, getHistory } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { logout, saveFateRecord, getHistory } from './firebase';
+import { verifyToken, getCurrentUser } from './api';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import ReactMarkdown from 'react-markdown';
@@ -127,7 +126,6 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-  const [points, setPoints] = useState(100);
   const [selectedSystems, setSelectedSystems] = useState<string[]>(['bazi']);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [calcError, setCalcError] = useState<string | null>(null);
@@ -136,20 +134,21 @@ export default function App() {
   // 登录和支付弹窗
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   
   // 使用积分系统
-  const { points: userPoints, refreshPoints } = usePoints();
+  const { points: userPoints, refreshPoints, checkPoints, usePoints: spendPoints, addPoints } = usePoints();
   
   const [birthInfo, setBirthInfo] = useState({
-    name: '徐聪',
+    name: '',
     gender: 'male' as 'male' | 'female',
     calendarType: 'solar' as 'solar' | 'lunar',
     isLeap: false,
-    year: 1996,
-    month: 5,
-    day: 8,
-    hour: 8,
-    minute: 30,
+    year: 1990,
+    month: 1,
+    day: 1,
+    hour: 12,
+    minute: 0,
     longitude: 116.4,
     country: 'CN',
     province: 'GD',
@@ -242,13 +241,24 @@ export default function App() {
   const [aiDepth, setAiDepth] = useState<'quick' | 'deep'>('quick');
   const [activeTab, setActiveTab] = useState('bazi');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [structuredAnalysis, setStructuredAnalysis] = useState<any>(null);
+  const [selectedPillar, setSelectedPillar] = useState<'year' | 'month' | 'day' | 'hour' | null>(null);
+  const [showShareToast, setShowShareToast] = useState(false);
+  const [selectedDaYunIdx, setSelectedDaYunIdx] = useState<number | null>(null);
+  const aiReportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    const cached = getCurrentUser();
+    if (cached) {
+      setIsLoggedIn(true);
+      setUser(cached);
+      loadHistory();
+    }
+    verifyToken().then(u => {
       if (u) {
         setIsLoggedIn(true);
         setUser(u);
-        loadHistory(u.uid);
+        loadHistory();
       } else {
         setIsLoggedIn(false);
         setUser(null);
@@ -256,32 +266,26 @@ export default function App() {
       }
       setIsAuthReady(true);
     });
-    return () => unsubscribe();
   }, []);
 
-  const loadHistory = async (uid: string) => {
+  const loadHistory = async () => {
     try {
-      const h = await getHistory(uid);
-      setHistory(h);
+      const h = await getHistory();
+      setHistory(h as any[]);
     } catch (err) {
       console.error('Failed to load history:', err);
     }
   };
 
-  const handleLogin = async () => {
-    try {
-      await loginWithGoogle();
-    } catch (err) {
-      console.error('Login failed:', err);
-    }
+  const handleLogin = () => {
+    setShowLoginModal(true);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (err) {
-      console.error('Logout failed:', err);
-    }
+  const handleLogout = () => {
+    logout();
+    setIsLoggedIn(false);
+    setUser(null);
+    setHistory([]);
   };
 
   const getLunarDateDisplay = (year: number, month: number, day: number, type: 'solar' | 'lunar', isLeap?: boolean) => {
@@ -345,6 +349,33 @@ export default function App() {
     return 'text-ink-900';
   };
 
+  const getCharElement = (char: string): string => {
+    if ('甲乙寅卯'.includes(char)) return '木';
+    if ('丙丁巳午'.includes(char)) return '火';
+    if ('戊己辰戌丑未'.includes(char)) return '土';
+    if ('庚辛申酉'.includes(char)) return '金';
+    if ('壬癸亥子'.includes(char)) return '水';
+    return '';
+  };
+
+  const getBrightnessColor = (brightness: string) => {
+    if (brightness === '庙') return 'text-red-700';
+    if (brightness === '旺') return 'text-orange-600';
+    if (brightness === '得' || brightness === '利') return 'text-amber-600';
+    if (brightness === '平') return 'text-ink-700';
+    if (brightness === '不' || brightness === '闲') return 'text-ink-400';
+    if (brightness === '陷') return 'text-blue-500';
+    return 'text-ink-800';
+  };
+
+  const getTransformationStyle = (t: string) => {
+    if (t === '化禄') return { char: '禄', cls: 'text-yellow-500' };
+    if (t === '化权') return { char: '权', cls: 'text-red-500' };
+    if (t === '化科') return { char: '科', cls: 'text-blue-500' };
+    if (t === '化忌') return { char: '忌', cls: 'text-gray-900' };
+    return null;
+  };
+
   const toggleCalendarType = (type: 'solar' | 'lunar') => {
     if (type === birthInfo.calendarType) return;
     
@@ -386,6 +417,13 @@ export default function App() {
     } catch (e) {
       return false;
     }
+  };
+
+  const getMaxDays = (year: number, month: number, calendarType: 'solar' | 'lunar') => {
+    if (calendarType === 'solar') {
+      return new Date(year, month, 0).getDate();
+    }
+    return 30; // lunar months are 29-30 days
   };
 
   const handleCalculate = async () => {
@@ -457,19 +495,22 @@ export default function App() {
     if (saveToHistory && user) {
       try {
         await saveFateRecord({
-          uid: user.uid,
+          uid: String(user.uid),
           name: birthInfo.name,
           birthInfo,
           fateData: data
         });
-        loadHistory(user.uid);
+        loadHistory();
       } catch (err) {
         console.error('Failed to save history:', err);
       }
     }
 
+    const sa = data.bazi ? getStructuredAnalysis(data.bazi) : null;
+    setStructuredAnalysis(sa);
     setFateData(data);
     setStep('dashboard');
+    window.scrollTo({ top: 0, behavior: 'instant' });
     setSelectedPalace(null);
     setIsCalculating(false);
     setActiveTab(selectedSystems[0]);
@@ -478,31 +519,49 @@ export default function App() {
   };
 
   const unlockAiInterpretation = async () => {
-    const cost = aiDepth === 'deep' ? 100 : 20;  // 深度 100，快速 20
-    if (points < cost) {
-      alert(`积分不足，需要 ${cost} 积分，当前 ${points} 积分`);
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
+    const cost = aiDepth === 'deep' ? 100 : 20;
+    if (!checkPoints(cost)) {
+      setShowPaymentModal(true);
+      return;
+    }
+    const deductResult = await spendPoints(cost, aiDepth === 'deep' ? 'AI深度解读' : 'AI快速解读');
+    if (!deductResult.success) {
+      setShowPaymentModal(true);
       return;
     }
     setIsUnlockingAi(true);
     setAiProgress(0);
-    setPoints(prev => prev - cost);
-    
-    // Simulate progress
-    const progressInterval = setInterval(() => {
-      setAiProgress(prev => {
-        if (prev >= 90) return prev;
-        return prev + Math.random() * 5;
-      });
-    }, 500);
+    setAiReport('');
+    setTimeout(() => aiReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+
+    const expectedChars = aiDepth === 'deep' ? 2200 : 1000;
+    let charCount = 0;
 
     try {
-      // 计算结构化分析数据
-      const structuredAnalysis = fateData.bazi ? getStructuredAnalysis(fateData.bazi) : null;
-      const report = await getUnifiedInterpretation(birthInfo, fateData, structuredAnalysis, aiDepth);
-      setAiReport(report);
-      setAiProgress(100);
+      const result = await getUnifiedInterpretation(
+        birthInfo, fateData, structuredAnalysis, aiDepth,
+        (chunk) => {
+          charCount += chunk.length;
+          setAiProgress(Math.min(95, (charCount / expectedChars) * 100));
+          setAiReport(prev => (prev ?? '') + chunk);
+        }
+      );
+
+      if (charCount === 0) {
+        // 流式调用失败，result 是错误信息字符串
+        setAiReport('AI 解读暂时无法连接，积分已退还，请稍后重试。');
+        await addPoints(cost, 'AI解读失败退款', 'refund');
+      } else {
+        setAiProgress(100);
+      }
+    } catch {
+      setAiReport('AI 解读出现异常，积分已退还，请稍后重试。');
+      await addPoints(cost, 'AI解读失败退款', 'refund');
     } finally {
-      clearInterval(progressInterval);
       setTimeout(() => {
         setIsUnlockingAi(false);
         setAiProgress(0);
@@ -512,27 +571,39 @@ export default function App() {
 
   const handleChat = async () => {
     if (!chatInput.trim() || isSendingChat) return;
-    
-    // 检查积分
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
+
     const CHAT_COST = 10;
-    if (points < CHAT_COST) {
-      alert(`积分不足，需要 ${CHAT_COST} 积分，当前 ${points} 积分`);
+    if (!checkPoints(CHAT_COST)) {
+      setShowPaymentModal(true);
       return;
     }
-    
+    const deductResult = await spendPoints(CHAT_COST, '与大师对话');
+    if (!deductResult.success) {
+      setShowPaymentModal(true);
+      return;
+    }
+
     const userMessage = chatInput.trim();
     setChatInput('');
     setChatMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsSendingChat(true);
-    
-    // 扣除积分
-    setPoints(prev => prev - CHAT_COST);
-    
-    // 计算结构化分析数据
-    const structuredAnalysis = fateData.bazi ? getStructuredAnalysis(fateData.bazi) : null;
-    const response = await chatWithMaster(birthInfo, fateData, structuredAnalysis, chatMessages, userMessage);
-    setChatMessages(prev => [...prev, { role: 'model', text: response }]);
-    setIsSendingChat(false);
+
+    try {
+      const response = await chatWithMaster(birthInfo, fateData, structuredAnalysis, chatMessages, userMessage);
+      const failed = !response || response.startsWith('抱歉');
+      if (failed) {
+        await addPoints(CHAT_COST, '对话失败退款', 'refund');
+        setChatMessages(prev => [...prev, { role: 'model', text: '连接暂时失败，积分已退还，请重试。' }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'model', text: response }]);
+      }
+    } catch {
+      await addPoints(CHAT_COST, '对话失败退款', 'refund');
+      setChatMessages(prev => [...prev, { role: 'model', text: '连接出现异常，积分已退还，请重试。' }]);
+    } finally {
+      setIsSendingChat(false);
+    }
   };
 
   if (!isAuthReady) {
@@ -560,19 +631,25 @@ export default function App() {
               <h1 className="text-xl font-serif tracking-tight text-ink-900">悬壶承光</h1>
             </div>
             <nav className="hidden md:flex items-center gap-8 text-[10px] uppercase tracking-[0.2em] font-bold text-ink-400">
-              <a href="#" className="hover:text-ink-900 transition-colors flex items-center gap-1.5">
-                {!isLoggedIn && <Lock size={10} />}
-                ARCHIVE
-              </a>
-              <a href="#" className="hover:text-ink-900 transition-colors">PHILOSOPHY</a>
-              <a href="#" className="hover:text-ink-900 transition-colors">CONSULTATION</a>
+              <button
+                onClick={() => { setStep('input'); }}
+                className="hover:text-ink-900 transition-colors"
+              >
+                新排盘 / NEW
+              </button>
+              {isLoggedIn && step === 'dashboard' && (
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className="hover:text-ink-900 transition-colors"
+                >
+                  历史 / ARCHIVE
+                </button>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-4 text-ink-400">
-              <button className="hover:text-ink-900 transition-colors"><Sun size={18} /></button>
-              <button className="hover:text-ink-900 transition-colors"><Plus size={18} /></button>
-              <button className="hover:text-ink-900 transition-colors"><Globe size={18} /></button>
+              <button onClick={() => setStep('input')} title="新排盘" className="hover:text-ink-900 transition-colors"><Plus size={18} /></button>
             </div>
             <div className="h-4 w-[1px] bg-paper-200" />
             <div className="flex items-center gap-4">
@@ -601,7 +678,7 @@ export default function App() {
               {isLoggedIn && user ? (
                 <div className="flex items-center gap-3">
                   <div className="text-right hidden sm:block">
-                    <p className="text-[10px] font-bold text-ink-900">{user.displayName}</p>
+                    <p className="text-[10px] font-bold text-ink-900">{user.name || user.email}</p>
                     <button 
                       onClick={handleLogout}
                       className="text-[9px] text-ink-400 hover:text-red-500 transition-colors uppercase tracking-widest"
@@ -610,9 +687,9 @@ export default function App() {
                     </button>
                   </div>
                   <div className="w-10 h-10 rounded-full border border-paper-200 overflow-hidden">
-                    <img 
-                      src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
-                      alt={user.displayName || 'User'} 
+                    <img
+                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'U')}&background=2D2D2D&color=F5F0E8`}
+                      alt={user.name || user.email || 'User'}
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -632,15 +709,15 @@ export default function App() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-16">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 md:px-8 pt-24 pb-8 md:pt-32 md:pb-16">
         <AnimatePresence mode="wait">
           {step === 'input' ? (
-            <motion.div 
+            <motion.div
               key="input"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-2xl mx-auto space-y-16"
+              className="max-w-2xl mx-auto space-y-16 pb-24 md:pb-0"
             >
               {/* Header */}
               <div className="text-center space-y-6">
@@ -703,16 +780,45 @@ export default function App() {
                   </div>
                 </div>
                 {!isLoggedIn ? (
-                  <button 
-                    onClick={() => setIsLoggedIn(true)}
+                  <button
+                    onClick={() => setShowLoginModal(true)}
                     className="text-[10px] uppercase tracking-[0.2em] font-bold text-ink-400 hover:text-ink-900 flex items-center gap-2 transition-colors"
                   >
                     <Lock className="w-3 h-3" /> 登录解锁
                   </button>
                 ) : (
-                  <button className="text-[10px] uppercase tracking-[0.2em] font-bold text-ink-900">
-                    选择档案
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowHistoryPanel(v => !v)}
+                      className="text-[10px] uppercase tracking-[0.2em] font-bold text-ink-900 flex items-center gap-1 hover:text-ink-600 transition-colors"
+                    >
+                      选择档案 <ChevronRight size={10} className={cn("transition-transform", showHistoryPanel && "rotate-90")} />
+                    </button>
+                    {showHistoryPanel && history.length > 0 && (
+                      <div className="absolute right-0 top-7 z-20 w-64 bg-white border border-paper-200 rounded-xl shadow-lg overflow-hidden">
+                        {history.slice(0, 5).map((rec, i) => (
+                          <button
+                            key={rec.id || i}
+                            onClick={() => {
+                              if (rec.birthInfo) setBirthInfo(rec.birthInfo);
+                              setShowHistoryPanel(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-paper-50 transition-colors border-b border-paper-100 last:border-0"
+                          >
+                            <p className="text-xs font-medium text-ink-900">{rec.name || '未命名'}</p>
+                            <p className="text-[10px] text-ink-400 mt-0.5">
+                              {rec.birthInfo?.year}年{rec.birthInfo?.month}月{rec.birthInfo?.day}日 · {rec.birthInfo?.gender === 'male' ? '男' : '女'}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showHistoryPanel && history.length === 0 && (
+                      <div className="absolute right-0 top-7 z-20 w-48 bg-white border border-paper-200 rounded-xl shadow-lg px-4 py-3">
+                        <p className="text-[10px] text-ink-400">暂无历史记录</p>
+                      </div>
+                    )}
+                  </div>
                 )}
               </section>
 
@@ -724,16 +830,84 @@ export default function App() {
                 </div>
 
                 <div className="space-y-12">
-                  {/* Birth Details Integrated */}
+                  {/* Name + Gender first */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div className="space-y-3">
+                      <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">姓名 / NAME</label>
+                      <input
+                        type="text"
+                        placeholder="请输入姓名"
+                        value={birthInfo.name}
+                        onChange={e => setBirthInfo({...birthInfo, name: e.target.value})}
+                        className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 transition-all font-light"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">性别 / GENDER</label>
+                      <div className="flex gap-4">
+                        {['male', 'female'].map(g => (
+                          <button
+                            key={g}
+                            onClick={() => setBirthInfo({...birthInfo, gender: g as any})}
+                            className={cn(
+                              "flex-1 py-2 text-[10px] uppercase tracking-widest border transition-all font-bold",
+                              birthInfo.gender === g
+                                ? "bg-ink-900 text-paper-50 border-ink-900"
+                                : "border-paper-200 text-ink-400 hover:border-ink-300 bg-white"
+                            )}
+                          >
+                            {g === 'male' ? '乾造 MALE' : '坤造 FEMALE'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Calendar toggle BEFORE date entry */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">历法 / CALENDAR</label>
+                    <div className="flex gap-4">
+                      {['solar', 'lunar'].map(type => (
+                        <button
+                          key={type}
+                          onClick={() => toggleCalendarType(type as any)}
+                          className={cn(
+                            "flex-1 py-2 text-[10px] uppercase tracking-widest border transition-all font-bold",
+                            birthInfo.calendarType === type
+                              ? "bg-ink-900 text-paper-50 border-ink-900"
+                              : "border-paper-200 text-ink-400 hover:border-ink-300 bg-white"
+                          )}
+                        >
+                          {type === 'solar' ? '公历 SOLAR' : '农历 LUNAR'}
+                        </button>
+                      ))}
+                    </div>
+                    {birthInfo.calendarType === 'lunar' && isLeapMonthAvailable(birthInfo.year, birthInfo.month) && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="checkbox"
+                          id="isLeap"
+                          checked={birthInfo.isLeap}
+                          onChange={e => setBirthInfo({...birthInfo, isLeap: e.target.checked})}
+                          className="w-4 h-4 rounded border-paper-200 text-gold-600 focus:ring-gold-500"
+                        />
+                        <label htmlFor="isLeap" className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold cursor-pointer">
+                          闰月 / LEAP MONTH
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Date & Time — day options respect calendar + month */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">年份 / YEAR</label>
-                      <select 
+                      <select
                         value={birthInfo.year}
                         onChange={e => {
                           const newYear = parseInt(e.target.value);
                           setBirthInfo({
-                            ...birthInfo, 
+                            ...birthInfo,
                             year: newYear,
                             isLeap: birthInfo.isLeap && isLeapMonthAvailable(newYear, birthInfo.month)
                           });
@@ -747,13 +921,15 @@ export default function App() {
                     </div>
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">月份 / MONTH</label>
-                      <select 
+                      <select
                         value={birthInfo.month}
                         onChange={e => {
                           const newMonth = parseInt(e.target.value);
+                          const maxD = getMaxDays(birthInfo.year, newMonth, birthInfo.calendarType);
                           setBirthInfo({
-                            ...birthInfo, 
+                            ...birthInfo,
                             month: newMonth,
+                            day: Math.min(birthInfo.day, maxD),
                             isLeap: birthInfo.isLeap && isLeapMonthAvailable(birthInfo.year, newMonth)
                           });
                         }}
@@ -769,14 +945,14 @@ export default function App() {
                     </div>
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">日期 / DAY</label>
-                      <select 
+                      <select
                         value={birthInfo.day}
                         onChange={e => setBirthInfo({...birthInfo, day: parseInt(e.target.value)})}
                         className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
                       >
-                        {Array.from({ length: 31 }, (_, i) => {
+                        {Array.from({ length: getMaxDays(birthInfo.year, birthInfo.month, birthInfo.calendarType) }, (_, i) => {
                           const d = i + 1;
-                          const lunarDays = ['初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十', '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十', '卅一'];
+                          const lunarDays = ['初一','初二','初三','初四','初五','初六','初七','初八','初九','初十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十','廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
                           const label = birthInfo.calendarType === 'lunar' ? lunarDays[i] : `${d}日`;
                           return <option key={d} value={d}>{label}</option>;
                         })}
@@ -784,7 +960,7 @@ export default function App() {
                     </div>
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">时辰 / HOUR</label>
-                      <select 
+                      <select
                         value={birthInfo.hour}
                         onChange={e => setBirthInfo({...birthInfo, hour: parseInt(e.target.value)})}
                         className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
@@ -801,16 +977,16 @@ export default function App() {
                     <span>{getOtherCalendarPreview()}</span>
                   </div>
 
+                  {/* Location */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">国家 / COUNTRY</label>
-                      <select 
+                      <select
                         value={birthInfo.country}
                         onChange={e => setBirthInfo({...birthInfo, country: e.target.value, province: '', city: ''})}
                         className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
                       >
                         <option value="">请选择国家</option>
-                        {/* 将中国排在第一位，其他按中文名称排序 */}
                         {[...Country.getAllCountries()].sort((a, b) => {
                           if (a.isoCode === 'CN') return -1;
                           if (b.isoCode === 'CN') return 1;
@@ -822,7 +998,7 @@ export default function App() {
                     </div>
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">省份 / PROVINCE</label>
-                      <select 
+                      <select
                         value={birthInfo.province}
                         onChange={e => setBirthInfo({...birthInfo, province: e.target.value, city: ''})}
                         className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
@@ -836,9 +1012,18 @@ export default function App() {
                     </div>
                     <div className="space-y-3">
                       <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">城市 / CITY</label>
-                      <select 
+                      <select
                         value={birthInfo.city}
-                        onChange={e => setBirthInfo({...birthInfo, city: e.target.value})}
+                        onChange={e => {
+                          const cityName = e.target.value;
+                          // Auto-fill longitude for non-CN cities
+                          let newLon = birthInfo.longitude;
+                          if (birthInfo.country !== 'CN' && cityName) {
+                            const cityData = City.getCitiesOfState(birthInfo.country, birthInfo.province).find(c => c.name === cityName);
+                            if (cityData?.longitude) newLon = parseFloat(cityData.longitude);
+                          }
+                          setBirthInfo({...birthInfo, city: cityName, longitude: newLon});
+                        }}
                         className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
                         disabled={!birthInfo.province}
                       >
@@ -848,82 +1033,19 @@ export default function App() {
                         ))}
                       </select>
                     </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">经度 / LONGITUDE</label>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        value={birthInfo.longitude}
-                        onChange={e => setBirthInfo({...birthInfo, longitude: parseFloat(e.target.value)})}
-                        className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                    <div className="space-y-3">
-                      <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">姓名 / NAME</label>
-                      <input 
-                        type="text" 
-                        placeholder="Your Name"
-                        value={birthInfo.name}
-                        onChange={e => setBirthInfo({...birthInfo, name: e.target.value})}
-                        className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 transition-all font-light"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">性别 / GENDER</label>
-                      <div className="flex gap-4">
-                        {['male', 'female'].map(g => (
-                          <button
-                            key={g}
-                            onClick={() => setBirthInfo({...birthInfo, gender: g as any})}
-                            className={cn(
-                              "flex-1 py-2 text-[10px] uppercase tracking-widest border transition-all font-bold",
-                              birthInfo.gender === g 
-                                ? "bg-ink-900 text-paper-50 border-ink-900" 
-                                : "border-paper-200 text-ink-400 hover:border-ink-300 bg-white"
-                            )}
-                          >
-                            {g === 'male' ? '乾造 MALE' : '坤造 FEMALE'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">历法选择 / CALENDAR</label>
-                    <div className="flex gap-4">
-                      {['solar', 'lunar'].map(type => (
-                        <button
-                          key={type}
-                          onClick={() => toggleCalendarType(type as any)}
-                          className={cn(
-                            "flex-1 py-2 text-[10px] uppercase tracking-widest border transition-all font-bold",
-                            birthInfo.calendarType === type 
-                              ? "bg-ink-900 text-paper-50 border-ink-900" 
-                              : "border-paper-200 text-ink-400 hover:border-ink-300 bg-white"
-                          )}
-                        >
-                          {type === 'solar' ? '公历 SOLAR' : '农历 LUNAR'}
-                        </button>
-                      ))}
-                    </div>
-                    {birthInfo.calendarType === 'lunar' && isLeapMonthAvailable(birthInfo.year, birthInfo.month) && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <input 
-                          type="checkbox" 
-                          id="isLeap"
-                          checked={birthInfo.isLeap}
-                          onChange={e => setBirthInfo({...birthInfo, isLeap: e.target.checked})}
-                          className="w-4 h-4 rounded border-paper-200 text-gold-600 focus:ring-gold-500"
-                        />
-                        <label htmlFor="isLeap" className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold cursor-pointer">
-                          闰月 / LEAP MONTH
-                        </label>
-                      </div>
-                    )}
+                    <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">出生经度 / LONGITUDE <span className="text-ink-300 normal-case font-normal">（影响真太阳时，用于精确排盘）</span></label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="-180"
+                      max="180"
+                      value={birthInfo.longitude}
+                      onChange={e => setBirthInfo({...birthInfo, longitude: parseFloat(e.target.value)})}
+                      className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
+                    />
                   </div>
 
                   {/* MBTI Selection */}
@@ -999,10 +1121,11 @@ export default function App() {
                   </div>
                 )}
 
-                <button 
+                {/* Desktop submit button (inline) */}
+                <button
                   onClick={handleCalculate}
                   disabled={isCalculating || selectedSystems.length === 0}
-                  className="w-full py-5 bg-ink-900 text-paper-50 text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-ink-700 transition-all disabled:opacity-50 flex items-center justify-center gap-4 group"
+                  className="hidden md:flex w-full py-5 bg-ink-900 text-paper-50 text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-ink-700 transition-all disabled:opacity-50 items-center justify-center gap-4 group"
                 >
                   {isCalculating ? (
                     <div className="w-4 h-4 border border-paper-50/30 border-t-paper-50 rounded-full animate-spin" />
@@ -1014,6 +1137,24 @@ export default function App() {
                   )}
                 </button>
               </section>
+
+              {/* Mobile sticky submit button */}
+              <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 p-4 bg-[#FDFCF9]/95 backdrop-blur-md border-t border-paper-200">
+                <button
+                  onClick={handleCalculate}
+                  disabled={isCalculating || selectedSystems.length === 0}
+                  className="w-full py-4 bg-ink-900 text-paper-50 text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-ink-700 transition-all disabled:opacity-50 flex items-center justify-center gap-3 rounded-2xl"
+                >
+                  {isCalculating ? (
+                    <div className="w-4 h-4 border border-paper-50/30 border-t-paper-50 rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      开启深度测算
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </motion.div>
           ) : (
             <motion.div 
@@ -1029,104 +1170,161 @@ export default function App() {
                 </div>
               ) : (
                 <>
-              {/* Summary Section */}
-              <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-1 bg-white/50 backdrop-blur-sm border border-paper-200 rounded-3xl p-8 space-y-8">
-                  <div className="space-y-2">
-                    <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold">PROFILE</p>
-                    <h2 className="text-3xl font-serif text-ink-900 leading-tight">{birthInfo.name}八字排盘</h2>
-                  </div>
-                  <div className="space-y-6 text-sm font-light text-ink-700">
-                    <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                      <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">性别 / GENDER</span>
-                      <span className="font-medium text-ink-900">{birthInfo.gender === 'male' ? '男 MALE' : '女 FEMALE'}</span>
-                    </div>
-                    <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                      <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">公历 / SOLAR</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-ink-900">{getSolarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap)} {birthInfo.hour}:{birthInfo.minute}</span>
-                        <button className="text-[10px] text-gold-600 hover:text-gold-700">编辑</button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                      <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">农历 / LUNAR</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-ink-900">{getLunarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap)}</span>
-                        <button className="text-[10px] text-gold-600 hover:text-gold-700">编辑</button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                      <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">出生地点 / LOCATION</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-ink-900 uppercase">
-                          {getCountryName(birthInfo.country)} {getProvinceName(birthInfo.country, birthInfo.province, birthInfo.province)} {getCityName(birthInfo.country, birthInfo.city)}
-                        </span>
-                        <button className="text-[10px] text-gold-600 hover:text-gold-700">编辑</button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                      <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">生肖属相 / ZODIAC</span>
-                      <span className="font-medium text-ink-900">{fateData.zodiac}</span>
-                    </div>
-                    <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                      <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">西洋星座 / WESTERN</span>
-                      <span className="font-medium text-ink-900">{fateData.westernZodiac}座</span>
-                    </div>
-                    {fateData.mbti && (
-                      <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                        <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">性格倾向 / MBTI</span>
-                        <span className="font-medium text-ink-900">{fateData.mbti.energy}{fateData.mbti.perception}{fateData.mbti.judgment}{fateData.mbti.lifestyle}</span>
-                      </div>
-                    )}
-                    {fateData.bazi && (
-                      <div className="flex justify-between items-center border-b border-paper-100 pb-3">
-                        <span className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">日主强弱 / STRENGTH</span>
-                        <span className={cn(
-                          "font-bold px-3 py-1 rounded-full text-[10px]",
-                          fateData.bazi.dayMaster.strength.includes('强') ? "bg-red-50 text-red-600" :
-                          fateData.bazi.dayMaster.strength.includes('弱') ? "bg-blue-50 text-blue-600" :
-                          "bg-paper-100 text-ink-600"
-                        )}>
-                          {fateData.bazi.dayMaster.strength}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {/* Hero Section — Identity + 四柱 + 命主画像 合并 */}
+              <section className="bg-white/60 backdrop-blur-sm border border-paper-200 rounded-3xl overflow-hidden">
+                {/* Top accent */}
+                <div className="h-px bg-gradient-to-r from-transparent via-gold-400/60 to-transparent" />
 
-                <div className="lg:col-span-2 bg-white/50 backdrop-blur-sm border border-paper-200 rounded-3xl p-12 flex flex-col justify-center">
-                  <div className="flex justify-between items-end mb-12">
-                    <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold">ENERGY BALANCE</p>
-                    <p className="text-[8px] text-gold-600/60 italic">基于八字原局数量统计 / Simple 8-Character Count</p>
+                <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-paper-100">
+
+                  {/* Col 1 — 身份信息 */}
+                  <div className="lg:col-span-3 p-6 md:p-8 flex flex-col gap-6">
+                    <div>
+                      <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold">命主 / PROFILE</p>
+                      <h2 className="text-3xl font-serif text-ink-900 mt-2 leading-tight">{birthInfo.name}</h2>
+                      <p className="text-[10px] text-ink-400 mt-1">
+                        {birthInfo.gender === 'male' ? '乾造' : '坤造'} · 虚岁 {new Date().getFullYear() - birthInfo.year + 1} 岁
+                      </p>
+                    </div>
+                    <div className="space-y-3 text-xs">
+                      {[
+                        { label: '公历', value: `${getSolarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap)} ${birthInfo.hour}:${String(birthInfo.minute).padStart(2,'0')}` },
+                        { label: '农历', value: getLunarDateDisplay(birthInfo.year, birthInfo.month, birthInfo.day, birthInfo.calendarType, birthInfo.isLeap) },
+                        { label: '出生地', value: `${getCountryName(birthInfo.country)} ${getProvinceName(birthInfo.country, birthInfo.province, birthInfo.province)} ${getCityName(birthInfo.country, birthInfo.city)}` },
+                        { label: '生肖 / 星座', value: `${fateData.zodiac} · ${fateData.westernZodiac}座` },
+                        ...(fateData.mbti ? [{ label: 'MBTI', value: `${fateData.mbti.energy}${fateData.mbti.perception}${fateData.mbti.judgment}${fateData.mbti.lifestyle}` }] : []),
+                      ].map((row, i, arr) => (
+                        <div key={i} className={cn("flex justify-between items-start gap-4 pb-3", i < arr.length - 1 && "border-b border-paper-100")}>
+                          <span className="text-ink-400 flex-shrink-0">{row.label}</span>
+                          <span className="text-ink-800 font-medium text-right">{row.value}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-5 gap-8">
-                    {fateData.bazi ? Object.entries(fateData.bazi.fiveElements).map(([el, data]: [any, any]) => (
-                      <div key={el} className="space-y-6 group cursor-pointer flex flex-col items-center">
-                        <div className="relative w-3 h-64 bg-paper-50/30 rounded-full overflow-hidden border border-paper-100 transition-all group-hover:border-gold-300">
-                          <motion.div 
-                            initial={{ height: 0 }}
-                            animate={{ height: `${data.percentage}%` }}
-                            className={cn(
-                              "absolute bottom-0 left-0 right-0 transition-all duration-1000",
-                              el === '木' ? 'bg-[#A7F3D0]' :
-                              el === '火' ? 'bg-[#FECACA]' :
-                              el === '土' ? 'bg-[#FDE68A]' :
-                              el === '金' ? 'bg-[#E5E7EB]' :
-                              'bg-[#BFDBFE]'
-                            )}
-                          />
+
+                  {/* Col 2 — 四柱命盘 */}
+                  <div className="lg:col-span-5 p-6 md:p-8 flex flex-col gap-5">
+                    <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold">四柱命盘 / FOUR PILLARS</p>
+                    {fateData.bazi ? (
+                      <>
+                        <div className="grid grid-cols-4 gap-2 md:gap-3 flex-1">
+                          {(['year', 'month', 'day', 'hour'] as const).map((key) => {
+                            const pillar = fateData.bazi!.pillars[key];
+                            const labels: Record<string, string> = { year: '年柱', month: '月柱', day: '日柱', hour: '时柱' };
+                            const isDay = key === 'day';
+                            return (
+                              <div key={key} className={cn(
+                                "flex flex-col items-center rounded-2xl py-5 px-1 gap-2 border relative overflow-hidden",
+                                isDay ? "bg-amber-50/60 border-gold-200 shadow-sm shadow-gold-100" : "bg-white border-paper-200"
+                              )}>
+                                {isDay && <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-gold-300 via-gold-500 to-gold-300" />}
+                                <span className={cn("text-[9px] font-bold tracking-widest", isDay ? "text-gold-600" : "text-ink-400")}>{labels[key]}</span>
+                                <span className={cn("text-3xl md:text-4xl font-serif font-bold", getElementColor(pillar.gan))}>{pillar.gan}</span>
+                                <span className={cn("text-2xl md:text-3xl font-serif", getElementColor(pillar.zhi))}>{pillar.zhi}</span>
+                                <span className={cn("text-[8px] font-medium tracking-wide", isDay ? "text-ink-500" : "text-ink-400")}>{pillar.tenGod}</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="text-center space-y-1">
-                          <p className="text-[10px] font-serif italic text-ink-400">{data.count}/8 ({data.percentage}%)</p>
-                          <p className="text-sm font-serif text-ink-900 group-hover:text-gold-600 transition-colors">{el}</p>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {(['木','火','土','金','水'] as const).map(el => {
+                            const elData = fateData.bazi!.fiveElements[el];
+                            if (!elData) return null;
+                            const isYong = structuredAnalysis?.xiYongShen.yongShen === el;
+                            const isXi = structuredAnalysis?.xiYongShen.xiShen === el;
+                            const isJi = structuredAnalysis?.xiYongShen.jiShen === el;
+                            const colorMap: Record<string, string> = {
+                              '木': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                              '火': 'bg-red-50 text-red-700 border-red-200',
+                              '土': 'bg-amber-50 text-amber-700 border-amber-200',
+                              '金': 'bg-zinc-100 text-zinc-600 border-zinc-200',
+                              '水': 'bg-blue-50 text-blue-700 border-blue-200'
+                            };
+                            return (
+                              <span key={el} className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1", colorMap[el])}>
+                                {el} {elData.percentage}%
+                                {isYong && <span className="font-bold text-emerald-600">用</span>}
+                                {isXi && <span className="font-bold text-amber-600">喜</span>}
+                                {isJi && <span className="font-bold text-red-500">忌</span>}
+                              </span>
+                            );
+                          })}
                         </div>
-                      </div>
-                    )) : (
-                      <div className="col-span-5 flex items-center justify-center h-64 text-ink-400 text-[10px] uppercase tracking-widest">
-                        未选择八字分析 / BAZI NOT SELECTED
+                      </>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-ink-300 text-[10px] uppercase tracking-widest">
+                        未选择八字分析
                       </div>
                     )}
                   </div>
+
+                  {/* Col 3 — 命主画像 */}
+                  <div className="lg:col-span-4 p-6 md:p-8 flex flex-col gap-5">
+                    <p className="text-[9px] uppercase tracking-[0.3em] text-ink-400 font-bold">命主画像 / FATE PORTRAIT</p>
+                    {structuredAnalysis ? (
+                      <>
+                        {/* 格局 + 强弱 */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base font-serif text-ink-900">{structuredAnalysis.pattern.name}</span>
+                            <span className={cn(
+                              "text-[9px] font-bold px-2 py-0.5 rounded-full",
+                              structuredAnalysis.strength.level.includes('强') ? "bg-red-50 text-red-600" :
+                              structuredAnalysis.strength.level.includes('弱') ? "bg-blue-50 text-blue-600" :
+                              "bg-paper-100 text-ink-600"
+                            )}>{structuredAnalysis.strength.level}</span>
+                          </div>
+                          <p className="text-[10px] text-ink-500 leading-relaxed">{structuredAnalysis.strength.reason}</p>
+                          <p className="text-[10px] text-ink-500 leading-relaxed">{structuredAnalysis.pattern.description}</p>
+                        </div>
+
+                        {/* 用喜忌 */}
+                        <div className="flex gap-2">
+                          <span className="flex-1 text-center py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold">
+                            <span className="block text-[8px] text-emerald-400 mb-0.5">用神</span>
+                            {structuredAnalysis.xiYongShen.yongShen}
+                          </span>
+                          <span className="flex-1 text-center py-2 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 text-[10px] font-bold">
+                            <span className="block text-[8px] text-amber-400 mb-0.5">喜神</span>
+                            {structuredAnalysis.xiYongShen.xiShen}
+                          </span>
+                          <span className="flex-1 text-center py-2 rounded-xl bg-red-50 border border-red-100 text-red-600 text-[10px] font-bold">
+                            <span className="block text-[8px] text-red-300 mb-0.5">忌神</span>
+                            {structuredAnalysis.xiYongShen.jiShen}
+                          </span>
+                        </div>
+
+                        {/* 当前大运 */}
+                        {fateData.bazi?.daYun && (() => {
+                          const cy = new Date().getFullYear();
+                          const va = cy - birthInfo.year + 1;
+                          const pillars = fateData.bazi!.daYun.pillars;
+                          const idx = pillars.findIndex((d: any, i: number) => va >= d.age && va < (pillars[i+1]?.age ?? 999));
+                          const cur = idx >= 0 ? pillars[idx] : null;
+                          const nxt = idx >= 0 ? pillars[idx + 1] : null;
+                          return cur ? (
+                            <div className="bg-ink-800 rounded-2xl p-4 flex items-center justify-between">
+                              <div>
+                                <p className="text-[8px] uppercase tracking-widest text-paper-300 mb-1">当前大运</p>
+                                <p className="text-2xl font-serif text-gold-300">{cur.pillar}</p>
+                                <p className="text-[9px] text-paper-300 mt-0.5">{cur.age}岁起 · {cur.year}年{nxt ? ` → ${nxt.age}岁` : ''}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[8px] text-paper-300">虚岁</p>
+                                <p className="text-2xl font-serif text-paper-100">{va}</p>
+                                <p className="text-[8px] text-paper-300">{cy}年</p>
+                              </div>
+                            </div>
+                          ) : null;
+                        })()}
+                      </>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-ink-300 text-[10px] uppercase tracking-widest">
+                        请先选择八字分析
+                      </div>
+                    )}
+                  </div>
+
                 </div>
               </section>
 
@@ -1183,81 +1381,160 @@ export default function App() {
                         ))}
                       </div>
 
+                      {/* Five Elements inside BaZi tab */}
+                      {structuredAnalysis && (
+                        <div className="bg-white border border-paper-200 rounded-2xl p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-[9px] font-bold text-ink-400 uppercase tracking-[0.2em]">FIVE ELEMENTS / 五行能量</h3>
+                            <div className="flex gap-1.5 text-[9px] font-bold">
+                              <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">用 {structuredAnalysis.xiYongShen.yongShen}</span>
+                              <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">喜 {structuredAnalysis.xiYongShen.xiShen}</span>
+                              <span className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded">忌 {structuredAnalysis.xiYongShen.jiShen}</span>
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            {(['木','火','土','金','水'] as const).map((el) => {
+                              const elData = fateData.bazi!.fiveElements[el];
+                              if (!elData) return null;
+                              const isYong = structuredAnalysis.xiYongShen.yongShen === el;
+                              const isXi = structuredAnalysis.xiYongShen.xiShen === el;
+                              const isJi = structuredAnalysis.xiYongShen.jiShen === el;
+                              const barColor = el === '木' ? 'bg-emerald-400' : el === '火' ? 'bg-red-400' : el === '土' ? 'bg-amber-400' : el === '金' ? 'bg-zinc-300' : 'bg-blue-400';
+                              return (
+                                <div key={el} className="flex items-center gap-3">
+                                  <div className="flex items-center gap-1.5 w-16 flex-shrink-0">
+                                    <span className={cn("text-sm font-serif font-bold", getElementColor(el))}>{el}</span>
+                                    {isYong && <span className="text-[8px] bg-emerald-100 text-emerald-700 px-1 rounded font-bold">用</span>}
+                                    {isXi && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded font-bold">喜</span>}
+                                    {isJi && <span className="text-[8px] bg-red-100 text-red-600 px-1 rounded font-bold">忌</span>}
+                                  </div>
+                                  <div className="flex-1 h-4 bg-paper-100 rounded-full overflow-hidden">
+                                    <motion.div
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${elData.percentage}%` }}
+                                      transition={{ duration: 0.8, ease: 'easeOut' }}
+                                      className={cn("h-full rounded-full", barColor, isJi ? 'opacity-50' : '')}
+                                    />
+                                  </div>
+                                  <div className="w-20 flex-shrink-0 text-right">
+                                    <span className="text-[10px] text-ink-500">{elData.count}字</span>
+                                    <span className="text-[10px] text-ink-400 ml-1">({elData.percentage}%)</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="space-y-8">
                         <div className="flex items-center justify-between">
                           <h3 className="text-[9px] font-bold text-ink-400 uppercase tracking-[0.2em]">BAZI CHART</h3>
                         </div>
                         <div className="h-[1px] w-full bg-paper-100" />
                         
-                        {/* BaZi Table (Desktop) */}
-                        <div className="hidden md:block overflow-x-auto rounded-xl border border-paper-200">
-                          <table className="w-full border-collapse text-center text-sm">
-                            <thead>
-                              <tr className="bg-paper-50 border-b border-paper-200">
-                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">项目</th>
-                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">年柱</th>
-                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">月柱</th>
-                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">日柱</th>
-                                <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">时柱</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr className="border-b border-paper-100">
-                                <td className="p-3 text-[10px] text-ink-400 font-bold">天干</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.year.gan))}>{fateData.bazi.pillars.year.gan}</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.month.gan))}>{fateData.bazi.pillars.month.gan}</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.day.gan))}>{fateData.bazi.pillars.day.gan}</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.hour.gan))}>{fateData.bazi.pillars.hour.gan}</td>
-                              </tr>
-                              <tr className="border-b border-paper-100">
-                                <td className="p-3 text-[10px] text-ink-400 font-bold">地支</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.year.zhi))}>{fateData.bazi.pillars.year.zhi}</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.month.zhi))}>{fateData.bazi.pillars.month.zhi}</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.day.zhi))}>{fateData.bazi.pillars.day.zhi}</td>
-                                <td className={cn("p-3 text-2xl font-serif", getElementColor(fateData.bazi.pillars.hour.zhi))}>{fateData.bazi.pillars.hour.zhi}</td>
-                              </tr>
-                              <tr className="border-b border-paper-100">
-                                <td className="p-3 text-[10px] text-ink-400 font-bold">十神</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.year.tenGod}</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.month.tenGod}</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.day.tenGod}</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.hour.tenGod}</td>
-                              </tr>
-                              <tr>
-                                <td className="p-3 text-[10px] text-ink-400 font-bold">纳音</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.year.naYin}</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.month.naYin}</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.day.naYin}</td>
-                                <td className="p-3 text-xs text-ink-600">{fateData.bazi.pillars.hour.naYin}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {/* BaZi Grid (Mobile) */}
-                        <div className="md:hidden grid grid-cols-2 gap-3">
-                          {[
-                            { title: '年柱', pillar: fateData.bazi.pillars.year },
-                            { title: '月柱', pillar: fateData.bazi.pillars.month },
-                            { title: '日柱', pillar: fateData.bazi.pillars.day },
-                            { title: '时柱', pillar: fateData.bazi.pillars.hour },
-                          ].map((item, i) => (
-                            <div key={i} className="bg-white border border-paper-200 rounded-xl p-3 flex flex-col items-center gap-2">
-                              <div className="text-[10px] font-bold text-ink-400 uppercase tracking-widest border-b border-paper-100 w-full text-center pb-1">{item.title}</div>
-                              <div className="flex gap-4">
-                                <div className="text-center">
-                                  <p className="text-[9px] text-ink-400">天干</p>
-                                  <p className={cn("text-xl font-serif", getElementColor(item.pillar.gan))}>{item.pillar.gan}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[9px] text-ink-400">地支</p>
-                                  <p className={cn("text-xl font-serif", getElementColor(item.pillar.zhi))}>{item.pillar.zhi}</p>
-                                </div>
+                        {/* BaZi Table */}
+                        {(() => {
+                          const cols: { key: 'year' | 'month' | 'day' | 'hour'; label: string; pillar: any }[] = [
+                            { key: 'year', label: '年柱', pillar: fateData.bazi.pillars.year },
+                            { key: 'month', label: '月柱', pillar: fateData.bazi.pillars.month },
+                            { key: 'day', label: '日柱', pillar: fateData.bazi.pillars.day },
+                            { key: 'hour', label: '时柱', pillar: fateData.bazi.pillars.hour },
+                          ];
+                          return (
+                            <>
+                              <div className="overflow-x-auto rounded-xl border border-paper-200">
+                                <table className="w-full border-collapse text-center text-sm">
+                                  <thead>
+                                    <tr className="bg-paper-50 border-b border-paper-200">
+                                      <th className="p-3 text-[10px] font-bold text-ink-400 uppercase tracking-widest">项目</th>
+                                      {cols.map(c => (
+                                        <th key={c.key}
+                                          onClick={() => setSelectedPillar(selectedPillar === c.key ? null : c.key)}
+                                          className={cn(
+                                            "p-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-colors select-none",
+                                            selectedPillar === c.key ? "bg-ink-900 text-gold-300" : "text-ink-400 hover:text-ink-900"
+                                          )}
+                                        >
+                                          {c.label} {selectedPillar === c.key ? '▲' : ''}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {[
+                                      { row: '天干', render: (p: any) => <span className={cn("text-2xl font-serif", getElementColor(p.gan))}>{p.gan}</span> },
+                                      { row: '地支', render: (p: any) => <span className={cn("text-2xl font-serif", getElementColor(p.zhi))}>{p.zhi}</span> },
+                                      { row: '十神', render: (p: any) => <span className="text-xs text-ink-600">{p.tenGod}</span> },
+                                      { row: '纳音', render: (p: any) => <span className="text-xs text-ink-500">{p.naYin}</span> },
+                                    ].map(({ row, render }) => (
+                                      <tr key={row} className="border-b border-paper-100 last:border-0">
+                                        <td className="p-3 text-[10px] text-ink-400 font-bold">{row}</td>
+                                        {cols.map(c => (
+                                          <td key={c.key}
+                                            onClick={() => setSelectedPillar(selectedPillar === c.key ? null : c.key)}
+                                            className={cn(
+                                              "p-3 cursor-pointer transition-colors",
+                                              selectedPillar === c.key ? "bg-ink-50" : "hover:bg-paper-50"
+                                            )}
+                                          >
+                                            {render(c.pillar)}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
-                              <div className="text-[9px] text-ink-500 w-full text-center border-t border-paper-100 pt-1">{item.pillar.tenGod} · {item.pillar.naYin}</div>
-                            </div>
-                          ))}
-                        </div>
+
+                              {/* Pillar Detail Panel */}
+                              {selectedPillar && (() => {
+                                const p = fateData.bazi.pillars[selectedPillar];
+                                const labelMap = { year: '年柱', month: '月柱', day: '日柱', hour: '时柱' };
+                                return (
+                                  <motion.div
+                                    key={selectedPillar}
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="bg-ink-50 border border-ink-100 rounded-2xl p-6 grid grid-cols-1 sm:grid-cols-3 gap-6"
+                                  >
+                                    <div className="sm:col-span-3 flex items-center justify-between">
+                                      <h4 className="text-xs font-bold text-ink-700 uppercase tracking-widest">
+                                        {labelMap[selectedPillar]} 详情 — {p.gan}{p.zhi}
+                                      </h4>
+                                      <button onClick={() => setSelectedPillar(null)} className="text-[10px] text-ink-400 hover:text-ink-900 font-bold">关闭</button>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <p className="text-[9px] uppercase tracking-widest text-ink-400 font-bold">藏干 / HIDDEN STEMS</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {p.hiddenStems?.length > 0 ? p.hiddenStems.map((h: any, i: number) => (
+                                          <span key={i} className="flex items-center gap-1 bg-white border border-paper-200 rounded-lg px-2 py-1">
+                                            <span className={cn("text-sm font-serif font-bold", getElementColor(h.gan))}>{h.gan}</span>
+                                            <span className="text-[9px] text-ink-400">{h.tenGod}</span>
+                                          </span>
+                                        )) : <span className="text-xs text-ink-400">无</span>}
+                                      </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <p className="text-[9px] uppercase tracking-widest text-ink-400 font-bold">空亡 / KONG WANG</p>
+                                      <p className="text-sm font-serif text-ink-700">{p.kongWang || '无'}</p>
+                                      <p className="text-[9px] uppercase tracking-widest text-ink-400 font-bold mt-3">纳音 / NA YIN</p>
+                                      <p className="text-sm text-ink-700">{p.naYin}</p>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <p className="text-[9px] uppercase tracking-widest text-ink-400 font-bold">神煞 / SHEN SHA</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {p.shenSha?.length > 0 ? p.shenSha.map((s: string, i: number) => (
+                                          <span key={i} className="bg-gold-50 border border-gold-200 text-gold-800 text-[10px] px-2 py-0.5 rounded">{s}</span>
+                                        )) : <span className="text-xs text-ink-400">无</span>}
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                );
+                              })()}
+                            </>
+                          );
+                        })()}
 
                       {/* BaZi Relations Section */}
                       {fateData.bazi.relations && fateData.bazi.relations.length > 0 && (
@@ -1281,23 +1558,143 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Da Yun Section */}
-                      <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-[9px] font-bold text-ink-400 uppercase tracking-[0.2em]">GREAT LUCK / 大运</h3>
-                          <p className="text-[10px] text-ink-500">起运时间：{fateData.bazi.daYun.startYear}年 ({fateData.bazi.daYun.startAge}岁)</p>
-                        </div>
-                        <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-                          {fateData.bazi.daYun.pillars.map((d, i) => (
-                            <div key={i} className="bg-white border border-paper-200 rounded-xl p-3 text-center space-y-2">
-                              <p className="text-[10px] text-ink-400 font-bold">{d.age}岁</p>
-                              <p className={cn("text-xl font-serif", getElementColor(d.pillar[0]))}>{d.pillar}</p>
-                              <p className="text-[9px] text-ink-500">{d.year}年</p>
+                      {/* Da Yun Timeline */}
+                      {(() => {
+                        const currentYear = new Date().getFullYear();
+                        const virtualAge = currentYear - birthInfo.year + 1;
+                        const pillars = fateData.bazi.daYun.pillars;
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-[9px] font-bold text-ink-400 uppercase tracking-[0.2em]">GREAT LUCK / 大运</h3>
+                              <p className="text-[10px] text-ink-500">起运：{fateData.bazi.daYun.startYear}年（{fateData.bazi.daYun.startAge}岁）</p>
                             </div>
-                          ))}
-                        </div>
-                      </div>
+                            <div className="overflow-x-auto pb-2 -mx-2 px-2">
+                              <div className="flex items-stretch gap-0 min-w-max relative">
+                                {/* Connecting line */}
+                                <div className="absolute top-8 left-8 right-8 h-[1px] bg-paper-200 z-0" />
+                                {pillars.map((d: any, i: number) => {
+                                  const nextAge = pillars[i + 1]?.age ?? 999;
+                                  const isCurrent = virtualAge >= d.age && virtualAge < nextAge;
+                                  const isSelected = selectedDaYunIdx === i;
+                                  return (
+                                    <div
+                                      key={i}
+                                      onClick={() => setSelectedDaYunIdx(isSelected ? null : i)}
+                                      className="flex flex-col items-center gap-2 relative z-10 cursor-pointer"
+                                      style={{ minWidth: '72px' }}
+                                    >
+                                      {/* Year dot */}
+                                      <div className={cn(
+                                        "w-4 h-4 rounded-full border-2 transition-all mt-6",
+                                        isCurrent
+                                          ? "bg-gold-500 border-gold-500 shadow-lg shadow-gold-500/40 scale-125"
+                                          : isSelected ? "bg-ink-700 border-ink-700"
+                                          : "bg-white border-paper-300"
+                                      )} />
+                                      {/* Card */}
+                                      <div className={cn(
+                                        "rounded-xl px-2 py-2 text-center border transition-all w-full",
+                                        isSelected
+                                          ? "bg-ink-900 border-ink-900 shadow-md"
+                                          : isCurrent
+                                          ? "bg-amber-50 border-amber-400 shadow-md shadow-amber-100"
+                                          : "bg-white border-paper-200 hover:border-gold-300"
+                                      )}>
+                                        <p className={cn("text-[9px] font-bold", isSelected ? "text-paper-400" : isCurrent ? "text-amber-600" : "text-ink-400")}>{d.age}岁</p>
+                                        <p className={cn("text-lg font-serif leading-tight", isSelected ? "text-white" : getElementColor(d.pillar[0]))}>{d.pillar}</p>
+                                        <p className={cn("text-[8px]", isSelected ? "text-paper-400" : isCurrent ? "text-amber-500" : "text-ink-400")}>{d.year}</p>
+                                      </div>
+                                      {isCurrent && !isSelected && (
+                                        <span className="text-[7px] text-amber-500 font-bold uppercase tracking-wider">▲ 当前</span>
+                                      )}
+                                      {isSelected && (
+                                        <span className="text-[7px] text-ink-500 font-bold uppercase tracking-wider">▼ 详情</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
+
+                    {/* Da Yun Detail Panel */}
+                    {selectedDaYunIdx !== null && fateData.bazi.daYun?.pillars && (() => {
+                      const pillars = fateData.bazi.daYun.pillars;
+                      const d = pillars[selectedDaYunIdx];
+                      if (!d) return null;
+                      const nextD = pillars[selectedDaYunIdx + 1];
+                      const gan = d.pillar[0];
+                      const zhi = d.pillar[1];
+                      const ganEl = getCharElement(gan);
+                      const zhiEl = getCharElement(zhi);
+                      const getTag = (el: string) => {
+                        if (structuredAnalysis?.xiYongShen.yongShen === el) return { text: '用神', cls: 'bg-emerald-100 text-emerald-700' };
+                        if (structuredAnalysis?.xiYongShen.xiShen === el) return { text: '喜神', cls: 'bg-amber-100 text-amber-700' };
+                        if (structuredAnalysis?.xiYongShen.jiShen === el) return { text: '忌神', cls: 'bg-red-100 text-red-600' };
+                        return null;
+                      };
+                      const ganTag = getTag(ganEl);
+                      const zhiTag = getTag(zhiEl);
+                      const isYong = (el: string) => structuredAnalysis?.xiYongShen.yongShen === el;
+                      const isJi = (el: string) => structuredAnalysis?.xiYongShen.jiShen === el;
+                      const bothYong = isYong(ganEl) || isYong(zhiEl);
+                      const bothJi = isJi(ganEl) && isJi(zhiEl);
+                      const anyJi = isJi(ganEl) || isJi(zhiEl);
+                      const summary = bothYong && !anyJi
+                        ? `${d.pillar}大运用喜神并临，运势大旺，宜积极进取把握机遇。`
+                        : bothJi
+                        ? `${d.pillar}大运忌神当令，宜守成为主，谨慎决策避免冒进。`
+                        : anyJi
+                        ? `${d.pillar}大运用忌混杂，有机亦有阻，需审时度势行事。`
+                        : `${d.pillar}大运五行平和，随缘而为，保持稳健。`;
+                      return (
+                        <motion.div
+                          key={selectedDaYunIdx}
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-ink-50 border border-ink-200 rounded-2xl p-6 space-y-5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-ink-800">
+                              第 {selectedDaYunIdx + 1} 柱大运 · <span className={cn("font-serif text-base", getElementColor(gan))}>{gan}</span><span className={cn("font-serif text-base", getElementColor(zhi))}>{zhi}</span>
+                              <span className="ml-2 text-xs font-normal text-ink-500">
+                                {d.age}岁起 – {nextD ? `${nextD.age - 1}岁` : ''}（{d.year}年）
+                              </span>
+                            </h4>
+                            <button onClick={() => setSelectedDaYunIdx(null)} className="text-[10px] text-ink-400 hover:text-ink-900 font-bold transition-colors">关闭</button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white border border-paper-200 rounded-xl p-4 space-y-2">
+                              <p className="text-[9px] uppercase tracking-widest text-ink-400 font-bold">天干 / HEAVENLY STEM</p>
+                              <div className="flex items-center gap-3">
+                                <span className={cn("text-4xl font-serif font-bold", getElementColor(gan))}>{gan}</span>
+                                <div className="space-y-1">
+                                  <p className="text-xs text-ink-600">{ganEl}行</p>
+                                  {ganTag && <span className={cn("text-[10px] px-2 py-0.5 rounded font-bold", ganTag.cls)}>{ganTag.text}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-white border border-paper-200 rounded-xl p-4 space-y-2">
+                              <p className="text-[9px] uppercase tracking-widest text-ink-400 font-bold">地支 / EARTHLY BRANCH</p>
+                              <div className="flex items-center gap-3">
+                                <span className={cn("text-4xl font-serif font-bold", getElementColor(zhi))}>{zhi}</span>
+                                <div className="space-y-1">
+                                  <p className="text-xs text-ink-600">{zhiEl}行</p>
+                                  {zhiTag && <span className={cn("text-[10px] px-2 py-0.5 rounded font-bold", zhiTag.cls)}>{zhiTag.text}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-white border border-paper-100 rounded-xl p-4 text-xs text-ink-600 leading-relaxed">
+                            {summary}
+                          </div>
+                        </motion.div>
+                      );
+                    })()}
 
                     <div className="space-y-8">
                       {/* Day Master Section */}
@@ -1335,7 +1732,7 @@ export default function App() {
                         ))}
                       </div>
 
-                      <div className="bg-white border border-paper-200 rounded-3xl p-4 aspect-square max-w-2xl mx-auto relative overflow-hidden shadow-inner">
+                      <div className="bg-white border border-paper-200 rounded-3xl p-2 md:p-4 w-full max-w-3xl mx-auto relative overflow-hidden shadow-inner" style={{ aspectRatio: '1/1', minWidth: '300px' }}>
                         <div className="grid grid-cols-4 grid-rows-4 h-full gap-1 relative z-10">
                           {/* Standard Ziwei Grid Layout (Clockwise from Bottom-Left) */}
                             {[
@@ -1348,151 +1745,261 @@ export default function App() {
                               const isSelected = selectedPalace === p.idx;
                               const isSanFang = selectedPalace !== null && fateData.ziwei.palaces[selectedPalace].sanFang.includes(palace.name);
                               const isSiZheng = selectedPalace !== null && fateData.ziwei.palaces[selectedPalace].siZheng === palace.name;
+                              const isDecadal = fateData.ziwei.decadal?.name === palace.name;
+                              const isYearly = fateData.ziwei.yearly?.name === palace.name;
 
                               return (
-                                <div 
-                                  key={p.idx} 
+                                <div
+                                  key={p.idx}
                                   onClick={() => setSelectedPalace(isSelected ? null : p.idx)}
                                   className={cn(
-                                    "border rounded p-0.5 flex flex-col justify-between transition-all cursor-pointer group relative overflow-hidden bg-white/50 backdrop-blur-sm",
-                                    isSelected ? "border-gold-500 bg-gold-50 shadow-lg z-10 scale-105" : 
-                                    isSanFang ? "border-emerald-300 bg-emerald-50/30" :
-                                    isSiZheng ? "border-blue-300 bg-blue-50/30" :
-                                    "border-paper-100 hover:border-gold-300 hover:bg-gold-50/10",
+                                    "border rounded-lg p-1 flex flex-col justify-between transition-all cursor-pointer group relative overflow-hidden",
+                                    isSelected ? "border-gold-400 bg-gold-50/80 shadow-md shadow-gold-100 z-10 ring-1 ring-gold-300" :
+                                    isSanFang ? "border-emerald-200 bg-emerald-50/50 ring-1 ring-emerald-100" :
+                                    isSiZheng ? "border-blue-200 bg-blue-50/50 ring-1 ring-blue-100" :
+                                    isDecadal ? "border-blue-400 bg-blue-50/60 ring-1 ring-blue-200" :
+                                    isYearly ? "border-amber-400 bg-amber-50/60 ring-1 ring-amber-200" :
+                                    "border-paper-100 bg-white/60 hover:border-gold-200 hover:bg-gold-50/20",
                                     p.pos
                                   )}
                                 >
                                   {/* Palace Header */}
                                   <div className="flex justify-between items-start z-10">
                                     <div className="flex items-center gap-0.5 leading-none">
-                                      <span className="text-[8px] font-bold text-ink-900">{palace.gan}</span>
-                                      <span className="text-[8px] font-bold text-ink-900">{palace.zhi}</span>
+                                      <span className="text-[9px] font-bold text-ink-900">{palace.gan}</span>
+                                      <span className="text-[9px] font-bold text-ink-900">{palace.zhi}</span>
                                     </div>
-                                    <span className={cn(
-                                      "text-[8px] font-bold transition-colors px-0.5 rounded leading-none",
-                                      isSelected ? "bg-gold-600 text-white" : "text-gold-600 group-hover:text-gold-700"
-                                    )}>{palace.name}</span>
+                                    <div className="flex items-center gap-0.5">
+                                      {isDecadal && <span className="text-[7px] bg-blue-500 text-white px-0.5 rounded leading-none font-bold">限</span>}
+                                      {isYearly && <span className="text-[7px] bg-amber-500 text-white px-0.5 rounded leading-none font-bold">流</span>}
+                                      <span className={cn(
+                                        "text-[9px] font-bold transition-colors px-0.5 rounded leading-none",
+                                        isSelected ? "bg-gold-600 text-white" : "text-gold-600 group-hover:text-gold-700"
+                                      )}>{palace.name}</span>
+                                    </div>
                                   </div>
 
                                 <div className="flex-1 flex justify-between gap-0.5 py-0.5 min-h-0 relative z-10">
                                   {/* Left: Minor Stars */}
                                   <div className="flex flex-row-reverse items-start gap-0.5 overflow-hidden">
-                                    {palace.minorStars.map((star, sIdx) => (
-                                      <div key={sIdx} className="flex flex-col items-center">
-                                        <span 
-                                          className="text-[8px] text-blue-600 font-medium leading-tight text-center"
-                                          style={{ writingMode: 'vertical-rl' }}
-                                        >
-                                          {star.name}
-                                        </span>
-                                      </div>
-                                    ))}
+                                    {palace.minorStars.map((star, sIdx) => {
+                                      const t = star.transformation ? getTransformationStyle(star.transformation) : null;
+                                      return (
+                                        <div key={sIdx} className="flex flex-col items-center">
+                                          {t && <span className={cn("text-[7px] font-bold leading-none", t.cls)}>{t.char}</span>}
+                                          <span
+                                            className={cn("text-[9px] font-medium leading-tight text-center", getBrightnessColor(star.brightness))}
+                                            style={{ writingMode: 'vertical-rl' }}
+                                          >
+                                            {star.name}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
 
                                   {/* Right: Major Stars */}
                                   <div className="flex flex-row-reverse items-start gap-0.5 overflow-hidden">
-                                    {palace.majorStars.map((star, sIdx) => (
-                                      <div key={sIdx} className="flex flex-col items-center">
-                                        <span 
-                                          className={cn(
-                                            "text-[10px] font-serif font-bold leading-tight text-center tracking-tighter",
-                                            ['紫微', '天府', '武曲', '天相', '太阳', '太阴'].includes(star.name) ? 'text-red-600' : 'text-ink-900'
-                                          )}
-                                          style={{ writingMode: 'vertical-rl' }}
-                                        >
-                                          {star.name}
-                                        </span>
-                                      </div>
-                                    ))}
+                                    {palace.majorStars.map((star, sIdx) => {
+                                      const t = star.transformation ? getTransformationStyle(star.transformation) : null;
+                                      return (
+                                        <div key={sIdx} className="flex flex-col items-center">
+                                          {t && <span className={cn("text-[8px] font-bold leading-none", t.cls)}>{t.char}</span>}
+                                          <span
+                                            className={cn(
+                                              "text-xs font-serif font-bold leading-tight text-center tracking-tighter",
+                                              getBrightnessColor(star.brightness)
+                                            )}
+                                            style={{ writingMode: 'vertical-rl' }}
+                                          >
+                                            {star.name}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
 
                                   {/* Palace Footer */}
                                   <div className="flex justify-between items-end z-10">
                                     <div className="flex gap-0.5">
-                                      {palace.yearlyStars.length > 0 && <span className="text-[6px] text-emerald-700 font-bold bg-emerald-50 px-0.5 rounded leading-none">流</span>}
-                                      {palace.decadalStars.length > 0 && <span className="text-[6px] text-blue-700 font-bold bg-blue-50 px-0.5 rounded leading-none">大</span>}
+                                      {palace.yearlyStars.length > 0 && <span className="text-[7px] text-emerald-700 font-bold bg-emerald-50 px-0.5 rounded leading-none">流</span>}
+                                      {palace.decadalStars.length > 0 && <span className="text-[7px] text-blue-700 font-bold bg-blue-50 px-0.5 rounded leading-none">大</span>}
                                     </div>
-                                    <span className="text-[7px] text-ink-200 font-mono italic leading-none">
-                                      {palace.gan}{palace.zhi}
-                                    </span>
+                                    {(palace as any).decadal?.range?.length > 0 && (
+                                      <span className="text-[7px] text-ink-400 leading-none">
+                                        {(palace as any).decadal.range[0]}~{(palace as any).decadal.range[1]}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               );
                             })}
-                          <div className="col-span-2 row-span-2 col-start-2 row-start-2 border border-paper-100 rounded-xl p-1 flex flex-col items-center justify-center text-center space-y-0.5">
-                            <p className="text-[8px] text-ink-400 uppercase tracking-widest">基本</p>
-                            <div className="text-[7px] leading-tight text-ink-600">
-                              {fateData.ziwei.lifeMaster} / {fateData.ziwei.bodyMaster}
+                          {/* Center cell */}
+                          <div className="col-span-2 row-span-2 col-start-2 row-start-2 bg-paper-50/80 rounded-xl flex flex-col items-center justify-center text-center gap-2 p-2">
+                            <div className="w-8 h-px bg-paper-200" />
+                            <p className="text-[9px] text-ink-400 uppercase tracking-[0.15em] font-bold">命 · 身</p>
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-serif text-ink-700 font-bold">{fateData.ziwei.lifeMaster}</p>
+                              <p className="text-xs text-ink-400">·</p>
+                              <p className="text-xs font-serif text-ink-700 font-bold">{fateData.ziwei.bodyMaster}</p>
                             </div>
-                          </div>
-                          
-                          {/* SVG Overlay for San Fang Si Zheng Lines */}
-                          <div className="absolute inset-0 pointer-events-none z-0 p-4">
-                            <svg className="w-full h-full" viewBox="0 0 100 100">
-                              {selectedPalace !== null && (() => {
-                                const coords: Record<number, [number, number]> = {
-                                  0: [0, 3], 1: [0, 2], 2: [0, 1], 3: [0, 0],
-                                  4: [1, 0], 5: [2, 0], 6: [3, 0], 7: [3, 1],
-                                  8: [3, 2], 9: [3, 3], 10: [2, 3], 11: [1, 3]
-                                };
-                                const getEdgePoint = (idx: number) => {
-                                  const [c, r] = coords[idx];
-                                  let x = (c + 0.5) * 25;
-                                  let y = (r + 0.5) * 25;
-                                  
-                                  // Constrain to inner edges of the 4x4 grid (the 2x2 center boundary)
-                                  if (c === 0) x = 25;
-                                  if (c === 3) x = 75;
-                                  if (r === 0) y = 25;
-                                  if (r === 3) y = 75;
-                                  
-                                  return [x, y];
-                                };
-                                const center = getEdgePoint(selectedPalace);
-                                const sanFang1 = getEdgePoint((selectedPalace + 4) % 12);
-                                const sanFang2 = getEdgePoint((selectedPalace + 8) % 12);
-                                const siZheng = getEdgePoint((selectedPalace + 6) % 12);
-
-                                return (
-                                  <>
-                                    {/* San Fang Lines (Triple Harmony) - Contained in center */}
-                                    <motion.path 
-                                      initial={{ pathLength: 0, opacity: 0 }}
-                                      animate={{ pathLength: 1, opacity: 1 }}
-                                      d={`M ${center[0]} ${center[1]} L ${sanFang1[0]} ${sanFang1[1]} L ${sanFang2[0]} ${sanFang2[1]} Z`}
-                                      fill="rgba(16, 185, 129, 0.05)"
-                                      stroke="rgba(16, 185, 129, 0.4)" 
-                                      strokeWidth="0.5" 
-                                      strokeDasharray="2 2"
-                                    />
-                                    {/* Si Zheng Line (Opposition) - Contained in center */}
-                                    <motion.line 
-                                      initial={{ pathLength: 0, opacity: 0 }}
-                                      animate={{ pathLength: 1, opacity: 1 }}
-                                      x1={center[0]} y1={center[1]} x2={siZheng[0]} y2={siZheng[1]} 
-                                      stroke="rgba(59, 130, 246, 0.5)" 
-                                      strokeWidth="0.8" 
-                                      strokeDasharray="4 2"
-                                    />
-                                    {/* Connection Points at Borders */}
-                                    {[center, sanFang1, sanFang2, siZheng].map((pt, i) => (
-                                      <g key={i}>
-                                        <circle cx={pt[0]} cy={pt[1]} r="1.2" fill={i === 0 ? "#EAB308" : i === 3 ? "#3B82F6" : "#10B981"} opacity="0.2" />
-                                        <circle cx={pt[0]} cy={pt[1]} r="0.6" fill={i === 0 ? "#EAB308" : i === 3 ? "#3B82F6" : "#10B981"} />
-                                      </g>
-                                    ))}
-                                  </>
-                                );
-                              })()}
-                            </svg>
+                            <div className="w-8 h-px bg-paper-200" />
+                            {selectedPalace !== null && (
+                              <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="mt-1 space-y-1"
+                              >
+                                <p className="text-[8px] uppercase tracking-widest text-emerald-500 font-bold">三合</p>
+                                {fateData.ziwei.palaces[selectedPalace].sanFang.map((n, i) => (
+                                  <p key={i} className="text-[9px] text-emerald-700 font-serif">{n}</p>
+                                ))}
+                                <p className="text-[8px] uppercase tracking-widest text-blue-400 font-bold mt-1">对冲</p>
+                                <p className="text-[9px] text-blue-700 font-serif">{fateData.ziwei.palaces[selectedPalace].siZheng}</p>
+                              </motion.div>
+                            )}
                           </div>
                         </div>
                       </div>
 
                       {/* Palace Detail Section */}
+                      {/* Ziwei 大运/流年 Section */}
+                      {/* 大限流年 全览 — 文墨天机风格 */}
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <h3 className="text-[9px] font-bold text-ink-400 uppercase tracking-[0.2em]">大限一览 / DECADAL PERIODS</h3>
+                          {fateData.ziwei.decadal && (
+                            <span className="text-[10px] bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold">
+                              当前大限：{fateData.ziwei.decadal.gan}{fateData.ziwei.decadal.zhi} {fateData.ziwei.decadal.name}宫 {fateData.ziwei.decadal.range[0]}～{fateData.ziwei.decadal.range[1]}岁
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 大限表格 */}
+                        <div className="overflow-x-auto rounded-xl border border-paper-200">
+                          <table className="w-full border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-paper-50 border-b border-paper-200">
+                                <th className="p-3 text-[9px] font-bold text-ink-400 uppercase tracking-widest text-left">宫位</th>
+                                <th className="p-3 text-[9px] font-bold text-ink-400 uppercase tracking-widest">大限干支</th>
+                                <th className="p-3 text-[9px] font-bold text-ink-400 uppercase tracking-widest">年龄段</th>
+                                <th className="p-3 text-[9px] font-bold text-ink-400 uppercase tracking-widest text-left hidden md:table-cell">主星</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[...fateData.ziwei.palaces]
+                                .filter((p: any) => Array.isArray(p.decadal?.range) && p.decadal.range.length > 0)
+                                .sort((a: any, b: any) => (a.decadal.range[0] ?? 99) - (b.decadal.range[0] ?? 99))
+                                .map((palace: any, i: number) => {
+                                  const isCurrent = fateData.ziwei.decadal?.name === palace.name;
+                                  return (
+                                    <tr key={i} className={cn(
+                                      "border-b border-paper-100 last:border-0 transition-colors",
+                                      isCurrent ? "bg-blue-50" : "hover:bg-paper-50"
+                                    )}>
+                                      <td className="p-3">
+                                        <div className="flex items-center gap-2">
+                                          {isCurrent && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />}
+                                          <span className={cn("font-serif font-bold", isCurrent ? "text-blue-800" : "text-ink-800")}>
+                                            {palace.name}宫
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        <span className={cn("font-serif font-bold text-sm", isCurrent ? "text-blue-700" : "text-ink-700")}>
+                                          {palace.decadal?.heavenlyStem}{palace.decadal?.earthlyBranch}
+                                        </span>
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        <span className={cn("text-[10px]", isCurrent ? "text-blue-600 font-bold" : "text-ink-500")}>
+                                          {palace.decadal?.range?.[0]}～{palace.decadal?.range?.[1]}岁
+                                        </span>
+                                      </td>
+                                      <td className="p-3 hidden md:table-cell">
+                                        <div className="flex flex-wrap gap-1">
+                                          {palace.majorStars.slice(0, 3).map((s: any, si: number) => (
+                                            <span key={si} className={cn(
+                                              "text-[9px] px-1.5 py-0.5 rounded font-medium",
+                                              isCurrent ? "bg-blue-100 text-blue-700" : "bg-paper-100 text-ink-600"
+                                            )}>{s.name}</span>
+                                          ))}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* 当前大限详情 + 流年 */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {fateData.ziwei.decadal && (
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 space-y-3">
+                              <p className="text-[9px] uppercase tracking-widest text-blue-500 font-bold">当前大限 / CURRENT DECADAL</p>
+                              <div className="flex items-baseline gap-3">
+                                <span className="text-2xl font-serif font-bold text-blue-800">{fateData.ziwei.decadal.gan}{fateData.ziwei.decadal.zhi}</span>
+                                <span className="text-lg font-serif text-blue-700">{fateData.ziwei.decadal.name}宫</span>
+                                <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">
+                                  {fateData.ziwei.decadal.range[0]}～{fateData.ziwei.decadal.range[1]}岁
+                                </span>
+                              </div>
+                              {fateData.ziwei.decadal.stars && fateData.ziwei.decadal.stars.length >= 4 && (
+                                <div className="space-y-1">
+                                  <p className="text-[8px] uppercase tracking-widest text-blue-400 font-bold">大限四化</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {[
+                                      { type: '化禄', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+                                      { type: '化权', cls: 'bg-red-50 text-red-700 border-red-200' },
+                                      { type: '化科', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                                      { type: '化忌', cls: 'bg-gray-100 text-gray-700 border-gray-300' },
+                                    ].map(({ type, cls }, si) => (
+                                      <span key={si} className={cn("text-[10px] px-2 py-0.5 rounded border font-bold", cls)}>
+                                        {fateData.ziwei.decadal!.stars[si]}{type}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {fateData.ziwei.yearly && (
+                            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-5 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-[9px] uppercase tracking-widest text-amber-500 font-bold">流年 / YEARLY FORTUNE</p>
+                                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                  {fateData.ziwei.yearly.year}年 · {new Date().getFullYear() - birthInfo.year + 1}岁
+                                </span>
+                              </div>
+                              <div className="flex items-baseline gap-3">
+                                <span className="text-2xl font-serif font-bold text-amber-800">{fateData.ziwei.yearly.gan}{fateData.ziwei.yearly.zhi}</span>
+                                <span className="text-lg font-serif text-amber-700">{fateData.ziwei.yearly.name}宫</span>
+                              </div>
+                              {fateData.ziwei.yearly.stars && fateData.ziwei.yearly.stars.length >= 4 && (
+                                <div className="space-y-1">
+                                  <p className="text-[8px] uppercase tracking-widest text-amber-400 font-bold">流年四化</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {[
+                                      { type: '化禄', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+                                      { type: '化权', cls: 'bg-red-50 text-red-700 border-red-200' },
+                                      { type: '化科', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                                      { type: '化忌', cls: 'bg-gray-100 text-gray-700 border-gray-300' },
+                                    ].map(({ type, cls }, si) => (
+                                      <span key={si} className={cn("text-[10px] px-2 py-0.5 rounded border font-bold", cls)}>
+                                        {fateData.ziwei.yearly!.stars[si]}{type}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {selectedPalace !== null && (
-                        <motion.div 
+                        <motion.div
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           className="bg-white border border-paper-200 rounded-3xl p-8 space-y-8"
@@ -1514,24 +2021,30 @@ export default function App() {
                             <div className="space-y-6">
                               <h5 className="text-[11px] font-bold text-ink-400 uppercase tracking-[0.2em]">主星与辅星 / MAJOR & MINOR STARS</h5>
                               <div className="space-y-4">
-                                {fateData.ziwei.palaces[selectedPalace].majorStars.map((s, i) => (
-                                  <div key={i} className="flex items-center justify-between p-3 bg-red-50/30 rounded-xl border border-red-100/50">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-bold text-red-700">{s.name}</span>
-                                      {s.transformation && <span className="px-1.5 py-0.5 bg-gold-500 text-white text-[8px] font-bold rounded">{s.transformation}</span>}
+                                {fateData.ziwei.palaces[selectedPalace].majorStars.map((s, i) => {
+                                  const t = s.transformation ? getTransformationStyle(s.transformation) : null;
+                                  return (
+                                    <div key={i} className="flex items-center justify-between p-3 bg-red-50/30 rounded-xl border border-red-100/50">
+                                      <div className="flex items-center gap-2">
+                                        <span className={cn("text-sm font-bold", getBrightnessColor(s.brightness))}>{s.name}</span>
+                                        {t && <span className={cn("px-1.5 py-0.5 text-[8px] font-bold rounded border", t.cls, 'border-current bg-white/80')}>{s.transformation}</span>}
+                                      </div>
+                                      <span className={cn("text-[10px] font-bold", getBrightnessColor(s.brightness))}>{s.brightness || '—'}</span>
                                     </div>
-                                    <span className="text-[10px] text-red-600/70 font-bold">{s.brightness}</span>
-                                  </div>
-                                ))}
-                                {fateData.ziwei.palaces[selectedPalace].minorStars.map((s, i) => (
-                                  <div key={i} className="flex items-center justify-between p-3 bg-paper-50 rounded-xl border border-paper-100">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium text-ink-800">{s.name}</span>
-                                      {s.transformation && <span className="px-1.5 py-0.5 bg-gold-500 text-white text-[8px] font-bold rounded">{s.transformation}</span>}
+                                  );
+                                })}
+                                {fateData.ziwei.palaces[selectedPalace].minorStars.map((s, i) => {
+                                  const t = s.transformation ? getTransformationStyle(s.transformation) : null;
+                                  return (
+                                    <div key={i} className="flex items-center justify-between p-3 bg-paper-50 rounded-xl border border-paper-100">
+                                      <div className="flex items-center gap-2">
+                                        <span className={cn("text-sm font-medium", getBrightnessColor(s.brightness))}>{s.name}</span>
+                                        {t && <span className={cn("px-1.5 py-0.5 text-[8px] font-bold rounded border", t.cls, 'border-current bg-white/80')}>{s.transformation}</span>}
+                                      </div>
+                                      <span className={cn("text-[10px] font-bold", getBrightnessColor(s.brightness))}>{s.brightness || '—'}</span>
                                     </div>
-                                    <span className="text-[10px] text-ink-400 font-bold">{s.brightness}</span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
 
@@ -1592,38 +2105,62 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === 'western' && fateData.western && (
-                    <div className="space-y-8">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-white border border-paper-200 rounded-3xl p-8 space-y-6">
-                          <div className="flex items-center gap-3">
-                            <Star className="w-6 h-6 text-gold-500" />
-                            <h4 className="text-xl font-serif">核心相位 / MAJOR ASPECTS</h4>
+                  {activeTab === 'western' && fateData.western && (() => {
+                    const SIGNS_ZH = ['白羊', '金牛', '双子', '巨蟹', '狮子', '处女', '天秤', '天蝎', '射手', '摩羯', '水瓶', '双鱼'];
+                    const PLANET_ICONS: Record<string, string> = {
+                      '太阳': '☉', '月亮': '☽', '水星': '☿', '金星': '♀', '火星': '♂',
+                      '木星': '♃', '土星': '♄', '天王星': '♅', '海王星': '♆', '冥王星': '♇'
+                    };
+                    const getPlanetSign = (lon: number) => {
+                      const idx = Math.floor(((lon % 360) + 360) % 360 / 30);
+                      const deg = ((lon % 360) + 360) % 360 % 30;
+                      return { sign: SIGNS_ZH[idx], deg: deg.toFixed(1) };
+                    };
+                    return (
+                      <div className="space-y-8">
+                        {/* Sun sign hero */}
+                        <div className="flex items-center gap-6 p-6 bg-gradient-to-r from-amber-50 to-gold-50 border border-gold-100 rounded-2xl">
+                          <div className="w-16 h-16 rounded-full bg-gold-100 flex items-center justify-center text-3xl">☉</div>
+                          <div>
+                            <p className="text-[9px] uppercase tracking-widest text-amber-600 font-bold">太阳星座 / SUN SIGN</p>
+                            <p className="text-3xl font-serif text-ink-900">{fateData.western.sunSign}座</p>
+                            <p className="text-xs text-ink-500 mt-1">代表核心自我与生命意志</p>
                           </div>
-                          <div className="space-y-4">
+                        </div>
+
+                        {/* Planet positions grid */}
+                        <div className="space-y-3">
+                          <h4 className="text-[9px] font-bold text-ink-400 uppercase tracking-[0.2em]">行星位置 / PLANET POSITIONS</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                            {fateData.western.planetPositions?.map((p: any, i: number) => {
+                              const { sign, deg } = getPlanetSign(p.longitude);
+                              return (
+                                <div key={i} className="bg-white border border-paper-200 rounded-xl p-3 space-y-1 text-center hover:border-gold-300 transition-colors">
+                                  <p className="text-2xl">{PLANET_ICONS[p.name] || '★'}</p>
+                                  <p className="text-xs font-bold text-ink-700">{p.name}</p>
+                                  <p className="text-sm font-serif text-ink-900">{sign}座</p>
+                                  <p className="text-[9px] text-ink-400">{deg}°</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Aspects */}
+                        <div className="space-y-3">
+                          <h4 className="text-[9px] font-bold text-ink-400 uppercase tracking-[0.2em]">核心相位 / MAJOR ASPECTS</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {fateData.western.aspects.map((aspect: any, i: number) => (
-                              <div key={i} className="p-4 bg-paper-50 rounded-2xl space-y-1">
+                              <div key={i} className="p-4 bg-paper-50 border border-paper-200 rounded-xl space-y-1 hover:border-gold-300 transition-colors">
                                 <p className="text-sm font-bold text-ink-900">{aspect.name}</p>
-                                <p className="text-xs text-ink-500">{aspect.description}</p>
+                                <p className="text-xs text-ink-500 leading-relaxed">{aspect.description}</p>
                               </div>
                             ))}
                           </div>
                         </div>
-                        <div className="bg-white border border-paper-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4">
-                          <div className="w-24 h-24 rounded-full bg-gold-50 flex items-center justify-center">
-                            <Sun className="w-12 h-12 text-gold-500" />
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-[10px] uppercase tracking-widest text-ink-400 font-bold">太阳星座 / SUN SIGN</p>
-                            <p className="text-3xl font-serif text-ink-900">{fateData.western.sunSign}座</p>
-                          </div>
-                          <p className="text-xs text-ink-500 max-w-xs">
-                            太阳星座代表了您的核心自我、意志力以及生命力的源泉。
-                          </p>
-                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {activeTab === 'mbti' && fateData.mbti && (
                     <div className="space-y-8">
@@ -1688,8 +2225,11 @@ export default function App() {
                               onClick={() => {
                                 setBirthInfo(record.birthInfo);
                                 setFateData(record.fateData);
+                                setStructuredAnalysis(record.fateData.bazi ? getStructuredAnalysis(record.fateData.bazi) : null);
+                                setAiReport(null);
                                 setStep('dashboard');
                                 setSelectedPalace(null);
+                                setActiveTab(Object.keys(record.fateData).find(k => record.fateData[k] && ['bazi','ziwei','western','mbti'].includes(k)) || 'bazi');
                               }}
                               className="flex items-center justify-between p-4 bg-paper-50 rounded-2xl hover:bg-paper-100 transition-all text-left group"
                             >
@@ -1741,18 +2281,18 @@ export default function App() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={unlockAiInterpretation}
-                      disabled={isUnlockingAi || points < (aiDepth === 'deep' ? 50 : 10)}
+                      disabled={isUnlockingAi}
                       className="w-full group relative bg-violet-800 hover:bg-violet-900 text-white px-12 py-4 rounded-full font-semibold tracking-wide transition-all shadow-lg shadow-violet-800/30 flex items-center justify-center gap-3 overflow-hidden"
                     >
                       {isUnlockingAi ? (
                         <div className="relative flex items-center gap-3 z-20">
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span className="font-semibold tracking-wide">正在深度测算中... {Math.round(aiProgress)}%</span>
+                          <span className="font-semibold tracking-wide">大师解读中 {Math.round(aiProgress)}%</span>
                         </div>
                       ) : (
                         <div className="relative flex items-center gap-3 z-20">
                           <Sparkles className="w-5 h-5 group-hover:animate-pulse" />
-                          <span className="text-white font-semibold tracking-wide">立马开启测算 ({aiDepth === 'deep' ? '100' : '20'}积分)</span>
+                          <span className="text-white font-semibold tracking-wide">开启深度解读 ({aiDepth === 'deep' ? '100' : '20'}积分)</span>
                         </div>
                       )}
                       
@@ -1816,8 +2356,9 @@ export default function App() {
               </section>
 
               {/* AI Report Display */}
-              {aiReport && (
-                <motion.section 
+              {aiReport !== null && (
+                <motion.section
+                  ref={aiReportRef}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="bg-white border border-paper-200 rounded-3xl p-12 space-y-8"
@@ -1841,33 +2382,51 @@ export default function App() {
                       >
                         <Download size={20} />
                       </button>
-                      <button 
+                      <button
                         onClick={async () => {
-                          if (navigator.share) {
-                            try {
-                              await navigator.share({
-                                title: `${birthInfo.name}的命理报告`,
-                                text: aiReport.substring(0, 100) + '...',
-                                url: window.location.href,
-                              });
-                            } catch (err) {
-                              console.log('Share failed:', err);
-                            }
-                          } else {
-                            navigator.clipboard.writeText(window.location.href);
-                            alert('链接已复制到剪贴板');
+                          const bazi = fateData.bazi;
+                          const sa = structuredAnalysis;
+                          const lines = [
+                            `✦ ${birthInfo.name} 命理摘要`,
+                            `出生：${birthInfo.year}年${birthInfo.month}月${birthInfo.day}日 ${birthInfo.hour}时 | ${birthInfo.gender === 'male' ? '男' : '女'}`,
+                            bazi ? `四柱：${bazi.pillars.year.gan}${bazi.pillars.year.zhi} ${bazi.pillars.month.gan}${bazi.pillars.month.zhi} ${bazi.pillars.day.gan}${bazi.pillars.day.zhi} ${bazi.pillars.hour.gan}${bazi.pillars.hour.zhi}` : '',
+                            sa ? `格局：${sa.pattern.name} | 日主：${sa.dayMaster.gan}（${sa.strength.level}）` : '',
+                            sa ? `用神 ${sa.xiYongShen.yongShen} · 喜神 ${sa.xiYongShen.xiShen} · 忌神 ${sa.xiYongShen.jiShen}` : '',
+                            fateData.ziwei ? `紫微命宫：${fateData.ziwei.palaces?.find((p: any) => p.name === '命宫')?.majorStars?.map((s: any) => s.name).join('') || '—'}` : '',
+                            aiReport ? `\n— AI大师解读摘要 —\n${aiReport.substring(0, 200)}...` : '',
+                            `\n由 悬壶承光 生成`
+                          ].filter(Boolean).join('\n');
+                          try {
+                            await navigator.clipboard.writeText(lines);
+                            setShowShareToast(true);
+                            setTimeout(() => setShowShareToast(false), 2500);
+                          } catch {
+                            if (navigator.share) navigator.share({ title: `${birthInfo.name}的命理摘要`, text: lines });
                           }
                         }}
                         className="p-2 rounded-full hover:bg-paper-50 text-ink-400 transition-colors"
+                        title="复制命盘摘要"
                       >
                         <Share2 size={20} />
                       </button>
                     </div>
                   </div>
                   <div className="prose prose-stone max-w-none">
-                    <div className="text-ink-700 font-light leading-loose markdown-content">
-                      <ReactMarkdown>{aiReport}</ReactMarkdown>
-                    </div>
+                    {aiReport === '' && isUnlockingAi ? (
+                      <div className="flex items-center gap-3 py-8 text-ink-400">
+                        <div className="flex gap-1">
+                          <span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce" />
+                          <span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                          <span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                        </div>
+                        <span className="text-xs italic">大师正在观星盘、查典籍...</span>
+                      </div>
+                    ) : (
+                      <div className="text-ink-700 font-light leading-loose markdown-content">
+                        <ReactMarkdown>{aiReport ?? ''}</ReactMarkdown>
+                        {isUnlockingAi && <span className="inline-block w-0.5 h-4 bg-ink-400 animate-pulse ml-0.5 align-middle" />}
+                      </div>
+                    )}
                   </div>
 
                   {/* Chat with AI Master */}
@@ -1960,16 +2519,16 @@ export default function App() {
             <div className="space-y-8">
               <h4 className="text-[10px] uppercase tracking-[0.2em] font-bold text-ink-900">快速链接 / LINKS</h4>
               <nav className="flex flex-col gap-4 text-sm text-ink-400 font-light">
-                <a href="#" className="hover:text-ink-900 transition-colors">关于我们 / ABOUT</a>
-                <a href="#" className="hover:text-ink-900 transition-colors">算法说明 / ALGORITHM</a>
-                <a href="#" className="hover:text-ink-900 transition-colors">隐私政策 / PRIVACY</a>
-                <a href="#" className="hover:text-ink-900 transition-colors">使用条款 / TERMS</a>
+                <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-left hover:text-ink-900 transition-colors">关于我们 / ABOUT</button>
+                <button onClick={() => setStep('input')} className="text-left hover:text-ink-900 transition-colors">开始测算 / START</button>
+                <span className="text-ink-300 cursor-default">隐私政策 / PRIVACY</span>
+                <span className="text-ink-300 cursor-default">使用条款 / TERMS</span>
               </nav>
             </div>
             <div className="space-y-8">
               <h4 className="text-[10px] uppercase tracking-[0.2em] font-bold text-ink-900">联系我们 / CONTACT</h4>
               <div className="space-y-4">
-                <p className="text-sm text-ink-400 font-light">support@ichingfate.com</p>
+                <p className="text-sm text-ink-400 font-light">support@xuanhuchengguang.online</p>
                 <div className="flex gap-4 text-ink-300">
                   <Globe size={18} className="hover:text-ink-900 cursor-pointer transition-colors" />
                   <History size={18} className="hover:text-ink-900 cursor-pointer transition-colors" />
@@ -1978,7 +2537,7 @@ export default function App() {
             </div>
           </div>
           <div className="mt-24 pt-8 border-t border-paper-100 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-[10px] text-ink-300 uppercase tracking-[0.2em]">© 2024 悬壶承光. All rights reserved.</p>
+            <p className="text-[10px] text-ink-300 uppercase tracking-[0.2em]">© {new Date().getFullYear()} 悬壶承光. All rights reserved.</p>
             <p className="text-[10px] text-ink-300 uppercase tracking-[0.2em]">Designed for Serenity & Insight.</p>
           </div>
         </div>
@@ -1997,6 +2556,19 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {showShareToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-emerald-800 text-paper-50 px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3"
+          >
+            <CheckCircle2 className="w-5 h-5 text-emerald-300" />
+            <span className="text-sm font-medium tracking-wide">命盘摘要已复制到剪贴板</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 登录弹窗 */}
       <LoginModal
@@ -2004,6 +2576,8 @@ export default function App() {
         onClose={() => setShowLoginModal(false)}
         onSuccess={() => {
           setShowLoginModal(false);
+          const u = getCurrentUser();
+          if (u) { setIsLoggedIn(true); setUser(u); loadHistory(); }
           refreshPoints();
         }}
       />

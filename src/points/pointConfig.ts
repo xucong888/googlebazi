@@ -59,7 +59,7 @@ export const MEMBERSHIP_PACKAGES = [
   {
     id: 'monthly',
     name: '月度会员',
-    duration: 30, // 天
+    duration: 1, // 月
     price: 28,
     currency: 'CNY',
     benefits: ['无限 AI 快速解读', '每日 3 次深度解读', '优先客服'],
@@ -67,7 +67,7 @@ export const MEMBERSHIP_PACKAGES = [
   {
     id: 'yearly',
     name: '年度会员',
-    duration: 365,
+    duration: 12, // 月
     price: 198,
     currency: 'CNY',
     benefits: ['所有功能无限使用', '专属客服', '新功能优先体验', '8折购买实物商品'],

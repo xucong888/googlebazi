@@ -1,57 +1,42 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: history
-    // Document ID: auto-generated
-    // Fields:
-    //   - uid: string (required, immutable) - The user ID of the owner
-    //   - name: string (required) - The name of the user
-    //   - birthInfo: map (required) - The birth information
-    //   - fateData: map (required) - The calculated fate data
-    //   - createdAt: timestamp (required, immutable) - Creation time
-    //
-    // ===============================================================
 
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "a878071684@gmail.com" && request.auth.token.email_verified == true));
-    }
 
-    function isValidHistoryRecord(data) {
-      return data.keys().hasOnly(['uid', 'name', 'birthInfo', 'fateData', 'createdAt']) &&
-             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.birthInfo is map &&
-             data.fateData is map &&
-             data.createdAt is timestamp;
-    }
-
+    // 命理历史记录
     match /history/{recordId} {
       allow read: if isOwner(resource.data.uid);
-      allow create: if isAuthenticated() && 
-                      isValidHistoryRecord(request.resource.data) && 
+      allow create: if isAuthenticated() &&
                       request.resource.data.uid == request.auth.uid;
-      allow update: if false; // History records should be immutable
+      allow update: if isOwner(resource.data.uid);
       allow delete: if isOwner(resource.data.uid);
     }
-    
+
+    // 用户积分账户
+    match /userPoints/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 积分流水记录
+    match /pointsHistory/{recordId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // 订单记录（支付接入后使用）
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // 用户基础信息
     match /users/{userId} {
       allow read, write: if isOwner(userId);
     }

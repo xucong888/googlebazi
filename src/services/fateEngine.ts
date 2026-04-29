@@ -335,21 +335,7 @@ function calculateRelations(stems: string[], branches: string[]): BaziRelation[]
   return uniqueRelations;
 }
 
-// 地支藏干权重表（本气、中气、余气）
-const ZHI_HIDE_GAN_WEIGHT: Record<string, { gan: string; weight: number }[]> = {
-  '子': [{ gan: '癸', weight: 1.0 }],
-  '丑': [{ gan: '己', weight: 0.6 }, { gan: '癸', weight: 0.3 }, { gan: '辛', weight: 0.1 }],
-  '寅': [{ gan: '甲', weight: 0.6 }, { gan: '丙', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
-  '卯': [{ gan: '乙', weight: 1.0 }],
-  '辰': [{ gan: '戊', weight: 0.6 }, { gan: '乙', weight: 0.3 }, { gan: '癸', weight: 0.1 }],
-  '巳': [{ gan: '丙', weight: 0.6 }, { gan: '庚', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
-  '午': [{ gan: '丁', weight: 0.7 }, { gan: '己', weight: 0.3 }],
-  '未': [{ gan: '己', weight: 0.6 }, { gan: '丁', weight: 0.3 }, { gan: '乙', weight: 0.1 }],
-  '申': [{ gan: '庚', weight: 0.6 }, { gan: '壬', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
-  '酉': [{ gan: '辛', weight: 1.0 }],
-  '戌': [{ gan: '戊', weight: 0.6 }, { gan: '辛', weight: 0.3 }, { gan: '丁', weight: 0.1 }],
-  '亥': [{ gan: '壬', weight: 0.7 }, { gan: '甲', weight: 0.3 }],
-};
+// ─── 排盘引擎：数据层 ────────────────────────────────────────────────────────
 
 // 天干五行映射
 const GAN_ELEMENT: Record<string, string> = {
@@ -360,69 +346,96 @@ const GAN_ELEMENT: Record<string, string> = {
   '壬': '水', '癸': '水',
 };
 
+// 地支藏干权重表：本气0.6、中气0.3、余气0.1（子平传统标准，与问真八字一致）
+const ZHI_HIDE_GAN_WEIGHT: Record<string, { gan: string; weight: number }[]> = {
+  '子': [{ gan: '癸', weight: 1.0 }],
+  '丑': [{ gan: '己', weight: 0.6 }, { gan: '癸', weight: 0.3 }, { gan: '辛', weight: 0.1 }],
+  '寅': [{ gan: '甲', weight: 0.6 }, { gan: '丙', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
+  '卯': [{ gan: '乙', weight: 1.0 }],
+  '辰': [{ gan: '戊', weight: 0.6 }, { gan: '乙', weight: 0.3 }, { gan: '癸', weight: 0.1 }],
+  '巳': [{ gan: '丙', weight: 0.6 }, { gan: '戊', weight: 0.3 }, { gan: '庚', weight: 0.1 }],
+  '午': [{ gan: '丁', weight: 0.7 }, { gan: '己', weight: 0.3 }],
+  '未': [{ gan: '己', weight: 0.6 }, { gan: '丁', weight: 0.3 }, { gan: '乙', weight: 0.1 }],
+  '申': [{ gan: '庚', weight: 0.6 }, { gan: '壬', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
+  '酉': [{ gan: '辛', weight: 1.0 }],
+  '戌': [{ gan: '戊', weight: 0.6 }, { gan: '辛', weight: 0.3 }, { gan: '丁', weight: 0.1 }],
+  '亥': [{ gan: '壬', weight: 0.7 }, { gan: '甲', weight: 0.3 }],
+};
+
+// 月令旺相休囚死状态表（来源：子平传统，china-testing/bazi datas.py 验证）
+const YUELING_STATE: Record<string, Record<string, string>> = {
+  '子': { '木': '相', '火': '死', '土': '囚', '金': '休', '水': '旺' },
+  '丑': { '木': '囚', '火': '休', '土': '旺', '金': '相', '水': '死' },
+  '寅': { '木': '旺', '火': '相', '土': '死', '金': '囚', '水': '休' },
+  '卯': { '木': '旺', '火': '相', '土': '死', '金': '囚', '水': '休' },
+  '辰': { '木': '囚', '火': '休', '土': '旺', '金': '相', '水': '死' },
+  '巳': { '木': '休', '火': '旺', '土': '相', '金': '死', '水': '囚' },
+  '午': { '木': '休', '火': '旺', '土': '相', '金': '死', '水': '囚' },
+  '未': { '木': '囚', '火': '休', '土': '旺', '金': '相', '水': '死' },
+  '申': { '木': '死', '火': '囚', '土': '休', '金': '旺', '水': '相' },
+  '酉': { '木': '死', '火': '囚', '土': '休', '金': '旺', '水': '相' },
+  '戌': { '木': '囚', '火': '休', '土': '旺', '金': '相', '水': '死' },
+  '亥': { '木': '相', '火': '死', '土': '囚', '金': '休', '水': '旺' },
+};
+
+// 旺相休囚死 → 强度乘数（子平：旺100% 相80% 休60% 囚40% 死20%）
+const YUELING_MULTIPLIER: Record<string, number> = {
+  '旺': 1.00, '相': 0.80, '休': 0.60, '囚': 0.40, '死': 0.20,
+};
+
+// ─── 排盘引擎：计算层 ────────────────────────────────────────────────────────
+
+function getYuelingMultiplier(element: string, monthZhi: string): number {
+  const state = YUELING_STATE[monthZhi]?.[element] ?? '囚';
+  return YUELING_MULTIPLIER[state] ?? 0.40;
+}
+
 function calculateFiveElements(eightChar: any): BaziData['fiveElements'] {
-  const elements = { '木': 0, '火': 0, '土': 0, '金': 0, '水': 0 };
-  
-  // 1. 计算天干（年干、月干、日干、时干）- 各算 1.0 权重
-  const gans = [
+  const monthZhi = eightChar.getMonthZhi();
+  const elements: Record<string, number> = { '木': 0, '火': 0, '土': 0, '金': 0, '水': 0 };
+
+  // 1. 四天干：基础值 1.0 × 月令旺衰乘数
+  [
     eightChar.getYearGan(),
     eightChar.getMonthGan(),
     eightChar.getDayGan(),
     eightChar.getTimeGan(),
-  ];
-  
-  gans.forEach(gan => {
+  ].forEach(gan => {
     const el = GAN_ELEMENT[gan];
-    if (el) elements[el as keyof typeof elements] += 1.0;
+    if (el) elements[el] += 1.0 * getYuelingMultiplier(el, monthZhi);
   });
-  
-  // 2. 计算地支藏干（带权重）
-  const zhis = [
-    { zhi: eightChar.getYearZhi(), position: 'year' },
-    { zhi: eightChar.getMonthZhi(), position: 'month' }, // 月令权重更高
-    { zhi: eightChar.getDayZhi(), position: 'day' },
-    { zhi: eightChar.getTimeZhi(), position: 'time' },
-  ];
-  
-  zhis.forEach(({ zhi, position }) => {
-    const hideGans = ZHI_HIDE_GAN_WEIGHT[zhi];
-    if (!hideGans) return;
-    
-    // 月令（月支）权重加成
-    const positionMultiplier = position === 'month' ? 1.5 : 1.0;
-    
-    hideGans.forEach(({ gan, weight }) => {
+
+  // 2. 四地支藏干：藏干本身权重 × 月令旺衰乘数
+  [
+    eightChar.getYearZhi(),
+    eightChar.getMonthZhi(),
+    eightChar.getDayZhi(),
+    eightChar.getTimeZhi(),
+  ].forEach(zhi => {
+    (ZHI_HIDE_GAN_WEIGHT[zhi] ?? []).forEach(({ gan, weight }) => {
       const el = GAN_ELEMENT[gan];
-      if (el) {
-        // 地支藏干权重 = 藏干本身权重 × 位置权重
-        elements[el as keyof typeof elements] += weight * positionMultiplier;
-      }
+      if (el) elements[el] += weight * getYuelingMultiplier(el, monthZhi);
     });
   });
-  
-  // 3. 计算百分比
-  const total = Object.values(elements).reduce((sum, val) => sum + val, 0);
+
+  // 3. 归一化为百分比
+  const total = Object.values(elements).reduce((s, v) => s + v, 0);
   const result: any = {};
-  
   Object.entries(elements).forEach(([el, score]) => {
-    const percentage = total > 0 ? (score / total) * 100 : 0;
-    
-    // 判断强弱
+    const pct = total > 0 ? (score / total) * 100 : 0;
     let strength = '中庸';
-    if (percentage === 0) strength = '极弱';
-    else if (percentage < 10) strength = '偏弱';
-    else if (percentage < 20) strength = '略弱';
-    else if (percentage < 30) strength = '中庸';
-    else if (percentage < 40) strength = '略强';
-    else strength = '极强';
-    
+    if (pct === 0)       strength = '极弱';
+    else if (pct < 10)  strength = '偏弱';
+    else if (pct < 20)  strength = '略弱';
+    else if (pct < 30)  strength = '中庸';
+    else if (pct < 40)  strength = '略强';
+    else                strength = '极强';
     result[el] = {
-      percentage: Math.round(percentage * 10) / 10,
+      percentage: Math.round(pct * 10) / 10,
       strength,
       count: Math.round(score * 10) / 10,
     };
   });
-
   return result;
 }
 
@@ -866,15 +879,24 @@ export function calculateZiwei(
     '申': 6, '酉': 7, '戌': 8, '亥': 9, '子': 10, '丑': 11
   };
 
+  // Normalize iztro's short mutagen values ('禄'/'权'/'科'/'忌') to full form ('化禄' etc.)
+  const normMutagen = (m: string): string => {
+    if (m === '禄') return '化禄';
+    if (m === '权') return '化权';
+    if (m === '科') return '化科';
+    if (m === '忌') return '化忌';
+    return m;
+  };
+
   const palaces: ZiweiPalace[] = astrolabe.palaces.map((p, i, all) => {
     const getPalaceName = (branch: string) => all.find(pl => pl.earthlyBranch === branch)?.name || '';
     const index = branchToIndex[p.earthlyBranch];
-    
-    // Find stars in luck cycles for this palace
-    const dPalace = decadalLuck?.palaces?.find((dp: any) => dp.earthlyBranch === p.earthlyBranch);
-    const yPalace = yearlyLuck?.palaces?.find((yp: any) => yp.earthlyBranch === p.earthlyBranch);
-    const mPalace = monthlyLuck?.palaces?.find((mp: any) => mp.earthlyBranch === p.earthlyBranch);
-    const dayPalace = dailyLuck?.palaces?.find((dp: any) => dp.earthlyBranch === p.earthlyBranch);
+
+    // decadal/yearly/monthly/daily stars: iztro stores them in luck.stars[palaceNames.indexOf(palace.name)]
+    const dIdx = decadalLuck?.palaceNames?.indexOf(p.name) ?? -1;
+    const yIdx = yearlyLuck?.palaceNames?.indexOf(p.name) ?? -1;
+    const mIdx = monthlyLuck?.palaceNames?.indexOf(p.name) ?? -1;
+    const dayIdx = dailyLuck?.palaceNames?.indexOf(p.name) ?? -1;
 
     return {
       name: p.name,
@@ -884,20 +906,20 @@ export function calculateZiwei(
       majorStars: p.majorStars.map(s => ({
         name: s.name,
         brightness: s.brightness || '',
-        transformation: s.mutagen || ''
+        transformation: normMutagen(s.mutagen || '')
       })),
       minorStars: p.minorStars.map(s => ({
         name: s.name,
         brightness: s.brightness || '',
-        transformation: s.mutagen || ''
+        transformation: normMutagen(s.mutagen || '')
       })),
       adjectiveStars: p.adjectiveStars?.map(s => s.name) || [],
       statusStars: [p.changsheng12, p.boshi12, p.jiangqian12, p.suiqian12].filter(Boolean),
-      yearlyStars: yPalace?.yearlyStars?.map((s: any) => s.name) || [],
-      monthlyStars: mPalace?.monthlyStars?.map((s: any) => s.name) || [],
-      dailyStars: dayPalace?.dailyStars?.map((s: any) => s.name) || [],
+      yearlyStars: yIdx >= 0 ? (yearlyLuck.stars?.[yIdx] || []).map((s: any) => s.name) : [],
+      monthlyStars: mIdx >= 0 ? (monthlyLuck.stars?.[mIdx] || []).map((s: any) => s.name) : [],
+      dailyStars: dayIdx >= 0 ? (dailyLuck.stars?.[dayIdx] || []).map((s: any) => s.name) : [],
       hourlyStars: [],
-      decadalStars: dPalace?.decadalStars?.map((s: any) => s.name) || [],
+      decadalStars: dIdx >= 0 ? (decadalLuck.stars?.[dIdx] || []).map((s: any) => s.name) : [],
       decadal: p.decadal,
       age: p.ages || [],
       sanFang: [
@@ -917,22 +939,30 @@ export function calculateZiwei(
     bodyMaster: astrolabe.body,
     zodiac: astrolabe.zodiac,
     palaces,
-    decadal: (decadalLuck && decadalLuck.focusedIndex !== undefined && decadalLuck.palaces[decadalLuck.focusedIndex]) ? {
-      index: decadalLuck.focusedIndex,
-      name: decadalLuck.palaces[decadalLuck.focusedIndex].name,
-      gan: decadalLuck.palaces[decadalLuck.focusedIndex].heavenlyStem,
-      zhi: decadalLuck.palaces[decadalLuck.focusedIndex].earthlyBranch,
-      range: decadalLuck.palaces[decadalLuck.focusedIndex].decadal.range,
-      stars: []
-    } : undefined,
-    yearly: (yearlyLuck && yearlyLuck.focusedIndex !== undefined && yearlyLuck.palaces[yearlyLuck.focusedIndex]) ? {
-      index: yearlyLuck.focusedIndex,
-      name: yearlyLuck.palaces[yearlyLuck.focusedIndex].name,
-      gan: yearlyLuck.palaces[yearlyLuck.focusedIndex].heavenlyStem,
-      zhi: yearlyLuck.palaces[yearlyLuck.focusedIndex].earthlyBranch,
-      year: currentYear,
-      stars: []
-    } : undefined
+    decadal: (() => {
+      if (!decadalLuck?.earthlyBranch) return undefined;
+      const mp = astrolabe.palaces.find((p: any) => p.earthlyBranch === decadalLuck.earthlyBranch);
+      return {
+        index: decadalLuck.index ?? 0,
+        name: mp?.name || '',
+        gan: decadalLuck.heavenlyStem || '',
+        zhi: decadalLuck.earthlyBranch,
+        range: mp?.decadal?.range || [],
+        stars: Array.isArray(decadalLuck.mutagen) ? decadalLuck.mutagen : []
+      };
+    })(),
+    yearly: (() => {
+      if (!yearlyLuck?.earthlyBranch) return undefined;
+      const mp = astrolabe.palaces.find((p: any) => p.earthlyBranch === yearlyLuck.earthlyBranch);
+      return {
+        index: yearlyLuck.index ?? 0,
+        name: mp?.name || '',
+        gan: yearlyLuck.heavenlyStem || '',
+        zhi: yearlyLuck.earthlyBranch,
+        year: currentYear,
+        stars: Array.isArray(yearlyLuck.mutagen) ? yearlyLuck.mutagen : []
+      };
+    })()
   };
 }
 
@@ -1047,14 +1077,39 @@ function calculateXiYongShen(
   return { xiShen, yongShen, jiShen, reason };
 }
 
-// 计算格局
+// 根据月支本气藏干计算月令十神（子平格局取月令，不取月干）
+function getMonthLingTenGod(monthZhi: string, dayGan: string): string {
+  // 取月支本气（权重最高的藏干）
+  const primaryGan = (ZHI_HIDE_GAN_WEIGHT[monthZhi] ?? [])[0]?.gan;
+  if (!primaryGan) return '';
+
+  const dmEl = getElement(dayGan);
+  const prEl = getElement(primaryGan);
+  const dmYang = '甲丙戊庚壬'.includes(dayGan);
+  const prYang = '甲丙戊庚壬'.includes(primaryGan);
+  const same = dmYang === prYang;
+
+  const shengMe: Record<string,string> = {'木':'水','火':'木','土':'火','金':'土','水':'金'};
+  const keMe:    Record<string,string> = {'木':'金','火':'水','土':'木','金':'火','水':'土'};
+  const iSheng:  Record<string,string> = {'木':'火','火':'土','土':'金','金':'水','水':'木'};
+  const iKe:     Record<string,string> = {'木':'土','火':'金','土':'水','金':'木','水':'火'};
+
+  if (prEl === dmEl)          return same ? '比肩' : '劫财';
+  if (prEl === shengMe[dmEl]) return same ? '偏印' : '正印';
+  if (prEl === keMe[dmEl])    return same ? '七杀' : '正官';
+  if (prEl === iSheng[dmEl])  return same ? '食神' : '伤官';
+  if (prEl === iKe[dmEl])     return same ? '偏财' : '正财';
+  return '';
+}
+
+// 计算格局（依月令本气，子平传统）
 function calculatePattern(
   monthZhi: string,
   dayGan: string,
-  tenGods: Record<string, string>
+  _tenGods: Record<string, string>
 ): { name: string; description: string } {
-  const monthTenGod = tenGods.month;
-  
+  const monthTenGod = getMonthLingTenGod(monthZhi, dayGan);
+
   // 常见格局判断
   if (monthTenGod === '比肩' || monthTenGod === '劫财') {
     return {
@@ -1089,42 +1144,43 @@ function calculatePattern(
   };
 }
 
-// 计算日主强弱得分
+// ─── 排盘引擎：分析层 ────────────────────────────────────────────────────────
+
+// 计算日主强弱
+// 传统标准：同党（日主同行 + 生我者）占总能量比例
+// 阈值来源：子平算法 >90%从强 >52%偏强 48~52%中和 >10%偏弱 ≤10%从弱
+// monthZhiElement 已通过 YUELING 乘数内嵌于百分比中，无需额外加成
 function calculateStrengthScore(
   dayMasterElement: string,
-  fiveElements: Record<string, number>,
-  monthZhiElement: string
+  percentages: Record<string, number>,
+  _monthZhiElement: string
 ): { level: '极强' | '偏强' | '中和' | '偏弱' | '极弱'; score: number; reason: string } {
-  const selfScore = fiveElements[dayMasterElement] || 0;
-  const shengWo = { '木': '水', '火': '木', '土': '火', '金': '土', '水': '金' };
-  const supportScore = fiveElements[shengWo[dayMasterElement]] || 0;
-  const totalSupport = selfScore + supportScore;
-  
-  // 月令权重
-  const monthBonus = monthZhiElement === dayMasterElement || shengWo[dayMasterElement] === monthZhiElement ? 20 : 0;
-  const finalScore = totalSupport + monthBonus;
-  
+  const shengWo: Record<string, string> = { '木': '水', '火': '木', '土': '火', '金': '土', '水': '金' };
+  const selfPct    = percentages[dayMasterElement] ?? 0;
+  const supportPct = percentages[shengWo[dayMasterElement]] ?? 0;
+  const total      = selfPct + supportPct;
+
   let level: '极强' | '偏强' | '中和' | '偏弱' | '极弱';
   let reason: string;
-  
-  if (finalScore >= 80) {
-    level = '极强';
-    reason = `日主${dayMasterElement}得令得地，五行得分${finalScore.toFixed(1)}，身强无依`;
-  } else if (finalScore >= 60) {
-    level = '偏强';
-    reason = `日主${dayMasterElement}得令或得地，五行得分${finalScore.toFixed(1)}，身强可用财官`;
-  } else if (finalScore >= 40) {
-    level = '中和';
-    reason = `日主${dayMasterElement}中和，五行得分${finalScore.toFixed(1)}，宜顺势而行`;
-  } else if (finalScore >= 20) {
-    level = '偏弱';
-    reason = `日主${dayMasterElement}失令失地，五行得分${finalScore.toFixed(1)}，身弱喜印比`;
+
+  if (total >= 90) {
+    level  = '极强';
+    reason = `日主${dayMasterElement}同党占${total.toFixed(1)}%，势力极强，或为从强格，宜泄耗制`;
+  } else if (total >= 52) {
+    level  = '偏强';
+    reason = `日主${dayMasterElement}同党占${total.toFixed(1)}%，身强，以官杀财星为用`;
+  } else if (total >= 48) {
+    level  = '中和';
+    reason = `日主${dayMasterElement}同党占${total.toFixed(1)}%，中和平衡，宜顺势而行`;
+  } else if (total >= 10) {
+    level  = '偏弱';
+    reason = `日主${dayMasterElement}同党占${total.toFixed(1)}%，身弱，以印星比劫为用`;
   } else {
-    level = '极弱';
-    reason = `日主${dayMasterElement}极弱，五行得分${finalScore.toFixed(1)}，从格或极弱扶抑`;
+    level  = '极弱';
+    reason = `日主${dayMasterElement}同党占${total.toFixed(1)}%，势力极弱，或为从弱格`;
   }
-  
-  return { level, score: finalScore, reason };
+
+  return { level, score: total, reason };
 }
 
 // 导出结构化分析数据
@@ -1147,8 +1203,8 @@ export function getStructuredAnalysis(baziData: BaziData): StructuredBaziAnalysi
   const dominant = sorted[0][0];
   const weakest = sorted[sorted.length - 1][0];
   
-  // 计算强弱
-  const strength = calculateStrengthScore(dayMasterElement, scores, monthZhiElement);
+  // 计算强弱（传百分比，与 20/40/60/80 阈值匹配）
+  const strength = calculateStrengthScore(dayMasterElement, percentages, monthZhiElement);
   
   // 计算喜用神
   const xiYongShen = calculateXiYongShen(dayMasterElement, scores, strength.level);

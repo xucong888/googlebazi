@@ -13,7 +13,6 @@ export const SYSTEMS = [
   { id: 'bazi', label: '八字 (BaZi)', category: 'CN' },
   { id: 'ziwei', label: '紫微斗数 (Zi Wei)', category: 'CN' },
   { id: 'western', label: '西方星盘 (Western)', category: 'WEST' },
-  { id: 'lifeNumerology', label: '生命灵数 (Numerology)', category: 'WEST' },
   { id: 'mbti', label: '性格分析 (MBTI)', category: 'PSYCH' },
 ];
 
