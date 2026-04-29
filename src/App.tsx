@@ -135,6 +135,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   
   // 使用积分系统
   const { points: userPoints, refreshPoints, checkPoints, usePoints: spendPoints, addPoints } = usePoints();
@@ -676,27 +677,44 @@ export default function App() {
               
               {/* 用户登录状态 */}
               {isLoggedIn && user ? (
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-[10px] font-bold text-ink-900">{user.name || user.email}</p>
-                    <button 
-                      onClick={handleLogout}
-                      className="text-[9px] text-ink-400 hover:text-red-500 transition-colors uppercase tracking-widest"
-                    >
-                      退出登录 / LOGOUT
-                    </button>
-                  </div>
-                  <div className="w-10 h-10 rounded-full border border-paper-200 overflow-hidden">
-                    <img
-                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'U')}&background=2D2D2D&color=F5F0E8`}
-                      alt={user.name || user.email || 'User'}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserMenu(v => !v)}
+                    className="flex items-center gap-2 focus:outline-none"
+                  >
+                    <div className="text-right hidden sm:block">
+                      <p className="text-[10px] font-bold text-ink-900">{user.name || user.email}</p>
+                      <p className="text-[9px] text-ink-400 uppercase tracking-widest">点击管理账户</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-full border border-paper-200 overflow-hidden">
+                      <img
+                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'U')}&background=2D2D2D&color=F5F0E8`}
+                        alt={user.name || user.email || 'User'}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  </button>
+                  {showUserMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                      <div className="absolute right-0 top-12 z-50 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 overflow-hidden">
+                        <div className="px-4 py-2 border-b border-gray-100">
+                          <p className="text-xs font-bold text-gray-900 truncate">{user.name || '用户'}</p>
+                          <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+                        </div>
+                        <button
+                          onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          退出登录
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
-                <button 
+                <button
                   onClick={() => setShowLoginModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-xs font-medium rounded-full hover:bg-gray-800 transition-colors"
                 >

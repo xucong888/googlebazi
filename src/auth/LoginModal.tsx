@@ -25,8 +25,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
 
   if (!isOpen) return null;
@@ -39,6 +41,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
       if (authMode === 'login') {
         await loginWithEmail(email, password);
       } else {
+        if (password !== confirmPassword) {
+          setError('两次输入的密码不一致');
+          setIsLoading(false);
+          return;
+        }
         await registerWithEmail(email, password, name);
       }
       onSuccess();
@@ -125,6 +132,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
               </div>
             </div>
 
+            {authMode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">确认密码</label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="再次输入密码"
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isLoading}
@@ -140,7 +171,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
               <p className="text-gray-600">
                 还没有账户？
                 <button
-                  onClick={() => { setAuthMode('register'); setError(''); }}
+                  onClick={() => { setAuthMode('register'); setError(''); setConfirmPassword(''); }}
                   className="text-amber-600 hover:text-amber-700 font-medium ml-1"
                 >
                   立即注册
@@ -150,7 +181,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
               <p className="text-gray-600">
                 已有账户？
                 <button
-                  onClick={() => { setAuthMode('login'); setError(''); }}
+                  onClick={() => { setAuthMode('login'); setError(''); setConfirmPassword(''); }}
                   className="text-amber-600 hover:text-amber-700 font-medium ml-1"
                 >
                   立即登录
