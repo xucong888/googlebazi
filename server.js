@@ -19,6 +19,16 @@ const JWT_SECRET = process.env.JWT_SECRET || 'xhcg-secret-key-2024';
 const JWT_EXPIRES = '30d';
 const FREE_REGISTER_POINTS = 100;
 const DAILY_CHECKIN_POINTS = 5;
+const XUNHUPAY_APPID = process.env.XUNHUPAY_APPID || '';
+const XUNHUPAY_APPSECRET = process.env.XUNHUPAY_APPSECRET || '';
+const BASE_URL = process.env.BASE_URL || 'https://xuanhuchengguang.online';
+
+const POINT_PACKAGES = [
+  { id: 'starter',  points: 100, bonus: 20,  price: 10  },
+  { id: 'basic',    points: 300, bonus: 0,   price: 25  },
+  { id: 'standard', points: 600, bonus: 100, price: 45  },
+  { id: 'premium',  points: 1500,bonus: 300, price: 100 },
+];
 
 // SQLite init
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'app.db');
@@ -48,6 +58,15 @@ db.exec(`
     description TEXT NOT NULL,
     source TEXT NOT NULL,
     balance INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+  );
+  CREATE TABLE IF NOT EXISTS payment_orders (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    amount REAL NOT NULL,
+    points INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    trade_no TEXT,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
   );
   CREATE TABLE IF NOT EXISTS fate_history (
@@ -210,6 +229,84 @@ app.patch('/api/history/:id', authenticate, (req, res) => {
   const { aiReport } = req.body || {};
   db.prepare('UPDATE fate_history SET ai_report = ? WHERE id = ? AND user_id = ?').run(aiReport || null, req.params.id, req.user.uid);
   res.json({ ok: true });
+});
+
+// --- Payment routes (虎皮椒) ---
+function xunhupaySign(params, secret) {
+  const sorted = Object.keys(params).sort();
+  const str = sorted.map(k => `${k}=${params[k]}`).join('&') + `&key=${secret}`;
+  return crypto.createHash('md5').update(str).digest('hex');
+}
+
+app.post('/api/payment/create', authenticate, async (req, res) => {
+  const { packageId } = req.body || {};
+  const pkg = POINT_PACKAGES.find(p => p.id === packageId);
+  if (!pkg) return res.status(400).json({ error: '无效套餐' });
+  if (!XUNHUPAY_APPID) return res.status(503).json({ error: '支付功能暂未配置' });
+
+  const orderId = crypto.randomUUID().replace(/-/g, '');
+  const totalPoints = pkg.points + (pkg.bonus || 0);
+  const params = {
+    appid: XUNHUPAY_APPID,
+    trade_order_id: orderId,
+    total_fee: pkg.price.toFixed(2),
+    title: `悬壶承光 ${totalPoints}积分`,
+    time: Math.floor(Date.now() / 1000).toString(),
+    notify_url: `${BASE_URL}/api/payment/notify`,
+    return_url: `${BASE_URL}/`,
+    nonce_str: crypto.randomBytes(8).toString('hex'),
+    type: 'alipay',
+  };
+  params.hash = xunhupaySign(params, XUNHUPAY_APPSECRET);
+
+  db.prepare('INSERT INTO payment_orders (id,user_id,amount,points) VALUES (?,?,?,?)').run(orderId, req.user.uid, pkg.price, totalPoints);
+
+  try {
+    const upstream = await fetch('https://api.xunhupay.com/payment/do.html', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await upstream.json();
+    if (data.errcode !== 0) {
+      db.prepare('UPDATE payment_orders SET status=? WHERE id=?').run('failed', orderId);
+      return res.status(400).json({ error: data.errmsg || '创建订单失败' });
+    }
+    res.json({ payUrl: data.url, orderId });
+  } catch (err) {
+    db.prepare('UPDATE payment_orders SET status=? WHERE id=?').run('failed', orderId);
+    res.status(502).json({ error: '支付服务暂时不可用' });
+  }
+});
+
+app.post('/api/payment/notify', express.text({ type: '*/*' }), (req, res) => {
+  try {
+    const params = Object.fromEntries(new URLSearchParams(req.body));
+    const { hash, ...rest } = params;
+    if (xunhupaySign(rest, XUNHUPAY_APPSECRET) !== hash) return res.send('fail');
+    if (params.status !== 'OD') return res.send('success');
+
+    const order = db.prepare('SELECT * FROM payment_orders WHERE id = ?').get(params.trade_order_id);
+    if (!order || order.status !== 'pending') return res.send('success');
+
+    db.transaction(() => {
+      db.prepare('UPDATE payment_orders SET status=?,trade_no=? WHERE id=?').run('paid', params.transaction_id, order.id);
+      const pts = db.prepare('SELECT balance FROM points WHERE user_id=?').get(order.user_id);
+      const newBal = (pts?.balance ?? 0) + order.points;
+      db.prepare('UPDATE points SET balance=?,total_earned=total_earned+? WHERE user_id=?').run(newBal, order.points, order.user_id);
+      db.prepare('INSERT INTO points_history (user_id,amount,type,description,source,balance) VALUES (?,?,?,?,?,?)').run(order.user_id, order.points, 'income', `充值 ${order.points} 积分`, 'purchase', newBal);
+    })();
+    res.send('success');
+  } catch (err) {
+    console.error('Payment notify error:', err);
+    res.send('fail');
+  }
+});
+
+app.get('/api/payment/status/:orderId', authenticate, (req, res) => {
+  const order = db.prepare('SELECT status,points FROM payment_orders WHERE id=? AND user_id=?').get(req.params.orderId, req.user.uid);
+  if (!order) return res.status(404).json({ error: '订单不存在' });
+  res.json(order);
 });
 
 // Proxy DeepSeek AI calls — keeps API key server-side
