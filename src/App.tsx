@@ -138,7 +138,8 @@ export default function App() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   
   // 使用积分系统
-  const { points: userPoints, refreshPoints, checkPoints, usePoints: spendPoints, addPoints } = usePoints();
+  const { points: userPoints, refreshPoints, checkPoints, usePoints: spendPoints, addPoints, dailyCheckIn } = usePoints();
+  const [checkinMsg, setCheckinMsg] = useState('');
   
   const [birthInfo, setBirthInfo] = useState({
     name: '',
@@ -698,11 +699,25 @@ export default function App() {
                   {showUserMenu && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 top-12 z-50 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 overflow-hidden">
+                      <div className="absolute right-0 top-12 z-50 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-2 overflow-hidden">
                         <div className="px-4 py-2 border-b border-gray-100">
                           <p className="text-xs font-bold text-gray-900 truncate">{user.name || '用户'}</p>
                           <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
                         </div>
+                        <button
+                          onClick={async () => {
+                            const result = await dailyCheckIn();
+                            setCheckinMsg(result.message);
+                            setTimeout(() => setCheckinMsg(''), 3000);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 transition-colors flex items-center gap-2"
+                        >
+                          <span>🗓</span> 每日签到 +100积分
+                        </button>
+                        {checkinMsg && (
+                          <p className="px-4 py-1 text-xs text-gray-500 bg-gray-50">{checkinMsg}</p>
+                        )}
+                        <div className="border-t border-gray-100 mt-1" />
                         <button
                           onClick={() => { setShowUserMenu(false); handleLogout(); }}
                           className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
