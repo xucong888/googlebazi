@@ -352,7 +352,7 @@ const ZHI_HIDE_GAN_WEIGHT: Record<string, { gan: string; weight: number }[]> = {
   '丑': [{ gan: '己', weight: 0.6 }, { gan: '癸', weight: 0.3 }, { gan: '辛', weight: 0.1 }],
   '寅': [{ gan: '甲', weight: 0.6 }, { gan: '丙', weight: 0.3 }, { gan: '戊', weight: 0.1 }],
   '卯': [{ gan: '乙', weight: 1.0 }],
-  '辰': [{ gan: '戊', weight: 0.6 }, { gan: '乙', weight: 0.3 }, { gan: '癸', weight: 0.1 }],
+  '辰': [{ gan: '戊', weight: 0.6 }, { gan: '癸', weight: 0.3 }, { gan: '乙', weight: 0.1 }],
   '巳': [{ gan: '丙', weight: 0.6 }, { gan: '戊', weight: 0.3 }, { gan: '庚', weight: 0.1 }],
   '午': [{ gan: '丁', weight: 0.7 }, { gan: '己', weight: 0.3 }],
   '未': [{ gan: '己', weight: 0.6 }, { gan: '丁', weight: 0.3 }, { gan: '乙', weight: 0.1 }],
