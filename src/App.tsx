@@ -136,6 +136,7 @@ export default function App() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   
   // 使用积分系统
   const { points: userPoints, refreshPoints, checkPoints, usePoints: spendPoints, addPoints, dailyCheckIn } = usePoints();
@@ -289,6 +290,17 @@ export default function App() {
     setUser(null);
     setHistory([]);
   };
+
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showUserMenu]);
 
   const getLunarDateDisplay = (year: number, month: number, day: number, type: 'solar' | 'lunar', isLeap?: boolean) => {
     try {
@@ -678,7 +690,7 @@ export default function App() {
               
               {/* 用户登录状态 */}
               {isLoggedIn && user ? (
-                <div className="relative">
+                <div className="relative" ref={userMenuRef}>
                   <button
                     onClick={() => setShowUserMenu(v => !v)}
                     className="flex items-center gap-2 focus:outline-none"
@@ -697,8 +709,6 @@ export default function App() {
                     </div>
                   </button>
                   {showUserMenu && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
                       <div className="absolute right-0 top-12 z-50 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-2 overflow-hidden">
                         <div className="px-4 py-2 border-b border-gray-100">
                           <p className="text-xs font-bold text-gray-900 truncate">{user.name || '用户'}</p>
@@ -725,7 +735,6 @@ export default function App() {
                           退出登录
                         </button>
                       </div>
-                    </>
                   )}
                 </div>
               ) : (
