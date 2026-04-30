@@ -1253,17 +1253,12 @@ export default function App() {
                           {(['year', 'month', 'day', 'hour'] as const).map((key) => {
                             const pillar = fateData.bazi!.pillars[key];
                             const labels: Record<string, string> = { year: '年柱', month: '月柱', day: '日柱', hour: '时柱' };
-                            const isDay = key === 'day';
                             return (
-                              <div key={key} className={cn(
-                                "flex flex-col items-center rounded-2xl py-5 px-1 gap-2 border relative overflow-hidden",
-                                isDay ? "bg-amber-50/60 border-gold-200 shadow-sm shadow-gold-100" : "bg-white border-paper-200"
-                              )}>
-                                {isDay && <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-gold-300 via-gold-500 to-gold-300" />}
-                                <span className={cn("text-[9px] font-bold tracking-widest", isDay ? "text-gold-600" : "text-ink-400")}>{labels[key]}</span>
+                              <div key={key} className="flex flex-col items-center rounded-2xl py-5 px-1 gap-2 border bg-white border-paper-200">
+                                <span className="text-[9px] font-bold tracking-widest text-ink-400">{labels[key]}</span>
                                 <span className={cn("text-3xl md:text-4xl font-serif font-bold", getElementColor(pillar.gan))}>{pillar.gan}</span>
                                 <span className={cn("text-2xl md:text-3xl font-serif", getElementColor(pillar.zhi))}>{pillar.zhi}</span>
-                                <span className={cn("text-[8px] font-medium tracking-wide", isDay ? "text-ink-500" : "text-ink-400")}>{pillar.tenGod}</span>
+                                <span className="text-[8px] font-medium tracking-wide text-ink-400">{pillar.tenGod}</span>
                               </div>
                             );
                           })}
