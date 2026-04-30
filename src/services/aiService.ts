@@ -46,8 +46,35 @@ function buildFusionPrompt(birthInfo: any, fateData: any, structuredAnalysis: an
   if (bazi && sa) {
     const p = bazi.pillars;
     const fmt = (hs: any[]) => hs?.map((h: any) => `${h.gan}(${h.tenGod})`).join('、') || '无';
+    // 给每个大运干支标注十神（相对日主）
+    const dayGanForDaYun = p.day.gan;
+    const ganEl: Record<string, string> = {'甲':'木','乙':'木','丙':'火','丁':'火','戊':'土','己':'土','庚':'金','辛':'金','壬':'水','癸':'水'};
+    // 地支本气藏干（取权重最高者）
+    const zhiPrimaryGan: Record<string, string> = {
+      '子':'癸','丑':'己','寅':'甲','卯':'乙','辰':'戊','巳':'丙','午':'丁','未':'己','申':'庚','酉':'辛','戌':'戊','亥':'壬'
+    };
+    const getTG = (gan: string, dm: string): string => {
+      const ge = ganEl[gan]; const de = ganEl[dm]; if (!ge||!de) return '';
+      const sy = '甲丙戊庚壬'.includes(dm); const gy = '甲丙戊庚壬'.includes(gan); const same = sy===gy;
+      const sheng: Record<string,string> = {'木':'水','火':'木','土':'火','金':'土','水':'金'};
+      const ke: Record<string,string> = {'木':'金','火':'水','土':'木','金':'火','水':'土'};
+      const iS: Record<string,string> = {'木':'火','火':'土','土':'金','金':'水','水':'木'};
+      const iK: Record<string,string> = {'木':'土','火':'金','土':'水','金':'木','水':'火'};
+      if (ge===de) return same?'比肩':'劫财';
+      if (ge===sheng[de]) return same?'偏印':'正印';
+      if (ge===ke[de]) return same?'七杀':'正官';
+      if (ge===iS[de]) return same?'食神':'伤官';
+      if (ge===iK[de]) return same?'偏财':'正财';
+      return '';
+    };
     const recentDaYun = bazi.daYun?.pillars?.slice(0, 6)
-      .map((d: any) => `${d.pillar}(${d.age}岁/${d.year}年)`).join(' → ') || '';
+      .map((d: any) => {
+        const gz = d.pillar; const g = gz[0]; const z = gz[1];
+        const ganTG = getTG(g, dayGanForDaYun);
+        const zhiTG = getTG(zhiPrimaryGan[z] || '', dayGanForDaYun);
+        const tg = [ganTG && `${g}${ganTG}`, zhiTG && `${z}${zhiTG}`].filter(Boolean).join('/');
+        return `${d.pillar}[${tg}](${d.age}岁/${d.year}年)`;
+      }).join(' → ') || '';
 
     baziBlock = `
 【四柱八字结构化证据】
@@ -140,16 +167,12 @@ ${aspects}`;
     ? `\n【灵数结构化证据】\n- 生命灵数：${numerology.lifePathNumber}（${numerology.meaning}）`
     : '';
 
-  // ── MBTI证据块 ──
-  const mbtiBlock = mbti
-    ? `\n【MBTI参考】\n- 类型：${mbti.energy}${mbti.perception}${mbti.judgment}${mbti.lifestyle}`
-    : '';
 
   return `你是一位精通${systemList.join('、')}的命理大师，说话直接有温度，分析有据可查，建议落地可执行，不写空泛鸡汤。
 
 **输出规范（违反视为失败）**
 
-【开头】直接从"## 核心结论"开始，严禁出现"好的""根据您提供""感谢""您好"等任何开场白。
+【开头】从"## 开篇白"开始，严禁出现"好的""根据您提供""感谢""您好""亲爱的"等任何客套开场白。开篇白必须是有画面感的一两句话，直接点出命主的处境或命运特质。
 
 【句式禁令】严禁使用以下句式模板：
 - "不是…而是…" / "真正的X是…" / "与其…不如…" / "不仅仅是…更是…"
@@ -176,9 +199,11 @@ ${baziBlock}
 ${ziweiBlock}
 ${westernBlock}
 ${numerologyBlock}
-${mbtiBlock}
 
 **输出结构（约2000-2500字，每模块须有交叉印证结论，覆盖核心证据后立即收尾）**
+
+## 开篇白
+用1-2句话直接点出命主此刻的处境或最核心的命运特质，像老友开口第一句，有温度但不客套。不超过50字，不用"您好"，不做自我介绍，不列条目。例如："火旺的人生，往往是越烧越亮——但你现在这把火，快要把自己烤干了。"或"三十岁的门槛，你踩着一颗金水的种子，等的就是时机。"风格要有点传神，点到即止。
 
 ## 核心结论
 列3-5条高置信结论，每条格式：结论本身（支撑体系）。直接陈述，不用排比句。

@@ -16,7 +16,7 @@ import {
   Compass,
   Star,
   Users,
-  Fingerprint,
+
   Menu,
   X,
   History,
@@ -158,14 +158,6 @@ export default function App() {
     city: 'GZ',
     district: '',
   });
-
-  const [mbti, setMbti] = useState({
-    energy: 'I' as 'I' | 'E',
-    perception: 'N' as 'S' | 'N',
-    judgment: 'F' as 'T' | 'F',
-    lifestyle: 'P' as 'J' | 'P',
-  });
-  const [showMbti, setShowMbti] = useState(false);
 
   const [saveToHistory, setSaveToHistory] = useState(true);
 
@@ -496,7 +488,6 @@ export default function App() {
         );
       }
       if (selectedSystems.includes('western')) data.western = calculateWesternAstrology(date);
-      if (selectedSystems.includes('mbti')) data.mbti = mbti;
       
       // Always calculate Life Numerology as it's part of AI's core systems
       data.lifeNumerology = calculateLifeNumerology(birthInfo.year, birthInfo.month, birthInfo.day);
@@ -1077,70 +1068,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">出生经度 / LONGITUDE <span className="text-ink-300 normal-case font-normal">（影响真太阳时，用于精确排盘）</span></label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="-180"
-                      max="180"
-                      value={birthInfo.longitude}
-                      onChange={e => setBirthInfo({...birthInfo, longitude: parseFloat(e.target.value)})}
-                      className="w-full bg-transparent border-b border-paper-200 py-2 focus:outline-none focus:border-ink-900 text-sm font-light transition-all"
-                    />
-                  </div>
-
-                  {/* MBTI Selection */}
-                  <div className="space-y-6 pt-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Fingerprint className="w-4 h-4 text-ink-400" />
-                        <label className="text-[10px] uppercase tracking-[0.2em] text-ink-400 font-bold">性格倾向 / MBTI (可选)</label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="checkbox" 
-                          id="showMbti"
-                          checked={showMbti}
-                          onChange={(e) => setShowMbti(e.target.checked)}
-                          className="w-4 h-4 rounded border-paper-200 text-gold-600 focus:ring-gold-500"
-                        />
-                        <label htmlFor="showMbti" className="text-[10px] uppercase tracking-widest text-ink-400 font-bold cursor-pointer">开启 / ENABLE</label>
-                      </div>
-                    </div>
-                    
-                    {showMbti && (
-                      <motion.div 
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="grid grid-cols-2 md:grid-cols-4 gap-4 overflow-hidden"
-                      >
-                        {[
-                          { key: 'energy', options: [{v: 'E', l: '外向 E'}, {v: 'I', l: '内向 I'}] },
-                          { key: 'perception', options: [{v: 'S', l: '实感 S'}, {v: 'N', l: '直觉 N'}] },
-                          { key: 'judgment', options: [{v: 'T', l: '思考 T'}, {v: 'F', l: '情感 F'}] },
-                          { key: 'lifestyle', options: [{v: 'J', l: '判断 J'}, {v: 'P', l: '知觉 P'}] },
-                        ].map((group) => (
-                          <div key={group.key} className="flex flex-col gap-2">
-                            {group.options.map(opt => (
-                              <button
-                                key={opt.v}
-                                onClick={() => setMbti({...mbti, [group.key]: opt.v})}
-                                className={cn(
-                                  "py-2 text-[10px] border transition-all font-bold",
-                                  (mbti as any)[group.key] === opt.v
-                                    ? "bg-ink-900 text-paper-50 border-ink-900"
-                                    : "border-paper-200 text-ink-400 hover:border-ink-300 bg-white"
-                                )}
-                              >
-                                {opt.l}
-                              </button>
-                            ))}
-                          </div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </div>
                 </div>
               </section>
 
@@ -2199,53 +2126,6 @@ export default function App() {
                     );
                   })()}
 
-                  {activeTab === 'mbti' && fateData.mbti && (
-                    <div className="space-y-8">
-                      <div className="bg-white border border-paper-200 rounded-3xl p-12 space-y-12">
-                        <div className="text-center space-y-4">
-                          <div className="inline-flex items-center gap-2 px-4 py-1 bg-ink-900 text-paper-50 rounded-full text-[10px] uppercase tracking-widest font-bold">
-                            Personality Profile
-                          </div>
-                          <h3 className="text-5xl font-serif">{fateData.mbti.energy}{fateData.mbti.perception}{fateData.mbti.judgment}{fateData.mbti.lifestyle}</h3>
-                          <p className="text-ink-500 font-light italic">
-                            {fateData.mbti.energy === 'E' ? '外向' : '内向'} · 
-                            {fateData.mbti.perception === 'S' ? '实感' : '直觉'} · 
-                            {fateData.mbti.judgment === 'T' ? '思考' : '情感'} · 
-                            {fateData.mbti.lifestyle === 'J' ? '判断' : '知觉'}
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                          <div className="space-y-6">
-                            <h4 className="text-[11px] font-bold text-ink-400 uppercase tracking-[0.2em]">性格优势 / STRENGTHS</h4>
-                            <ul className="space-y-3">
-                              {[
-                                fateData.mbti.perception === 'N' ? '富有远见，善于发现潜在可能性' : '脚踏实地，关注细节与现实',
-                                fateData.mbti.judgment === 'F' ? '极具同理心，善于维护和谐关系' : '逻辑严密，决策果断客观',
-                                fateData.mbti.energy === 'E' ? '充满活力，善于在社交中获取能量' : '深思熟虑，享受独处的宁静'
-                              ].map((s, i) => (
-                                <li key={i} className="flex items-start gap-3 text-sm text-ink-700">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" />
-                                  {s}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                          <div className="space-y-6">
-                            <h4 className="text-[11px] font-bold text-ink-400 uppercase tracking-[0.2em]">成长建议 / GROWTH</h4>
-                            <div className="p-6 bg-paper-50 rounded-2xl border border-paper-100">
-                              <p className="text-sm text-ink-600 leading-relaxed font-light">
-                                作为 {fateData.mbti.energy}{fateData.mbti.perception}{fateData.mbti.judgment}{fateData.mbti.lifestyle} 型人格，您在
-                                {fateData.mbti.lifestyle === 'P' ? ' 灵活性与适应力 ' : ' 组织性与计划性 '} 方面表现卓越。
-                                建议在日常生活中尝试平衡您的 {fateData.mbti.judgment === 'T' ? ' 情感表达 ' : ' 逻辑分析 '}，这将使您的决策更加全面。
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   {activeTab === 'history' && (
                     <div className="space-y-8">
                       <div className="bg-white border border-paper-200 rounded-3xl p-8 space-y-6">
@@ -2266,7 +2146,7 @@ export default function App() {
                                 setAiReport(null);
                                 setStep('dashboard');
                                 setSelectedPalace(null);
-                                setActiveTab(Object.keys(record.fateData).find(k => record.fateData[k] && ['bazi','ziwei','western','mbti'].includes(k)) || 'bazi');
+                                setActiveTab(Object.keys(record.fateData).find(k => record.fateData[k] && ['bazi','ziwei','western'].includes(k)) || 'bazi');
                               }}
                               className="flex items-center justify-between p-4 bg-paper-50 rounded-2xl hover:bg-paper-100 transition-all text-left group"
                             >

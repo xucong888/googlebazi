@@ -13,7 +13,6 @@ export const SYSTEMS = [
   { id: 'bazi', label: '八字 (BaZi)', category: 'CN' },
   { id: 'ziwei', label: '紫微斗数 (Zi Wei)', category: 'CN' },
   { id: 'western', label: '西方星盘 (Western)', category: 'WEST' },
-  { id: 'mbti', label: '性格分析 (MBTI)', category: 'PSYCH' },
 ];
 
 export const MBTI_DESCRIPTIONS: Record<string, { title: string, description: string, strengths: string[], growth: string[], careers: string[] }> = {
