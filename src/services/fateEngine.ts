@@ -394,7 +394,13 @@ function calculateFiveElements(eightChar: any): BaziData['fiveElements'] {
   const monthZhi = eightChar.getMonthZhi();
   const elements: Record<string, number> = { '木': 0, '火': 0, '土': 0, '金': 0, '水': 0 };
 
-  // 1. 四天干：基础值 1.0 × 月令旺衰乘数
+  // 1. 四天干：旺月+15%，相月-10%，其余不变（月令对天干影响较弱）
+  const stemMult = (el: string): number => {
+    const state = YUELING_STATE[monthZhi]?.[el];
+    if (state === '旺') return 1.15;
+    if (state === '相') return 0.90;
+    return 1.0;
+  };
   [
     eightChar.getYearGan(),
     eightChar.getMonthGan(),
@@ -402,23 +408,28 @@ function calculateFiveElements(eightChar: any): BaziData['fiveElements'] {
     eightChar.getTimeGan(),
   ].forEach(gan => {
     const el = GAN_ELEMENT[gan];
-    if (el) elements[el] += 1.0 * getYuelingMultiplier(el, monthZhi);
+    if (el) elements[el] += 1.0 * stemMult(el);
   });
 
-  // 2. 四地支藏干：藏干本身权重 × 月令旺衰乘数
+  // 2. 月支藏干：月令司令，权重 × 2.5（传统「月令当令」最重）
+  (ZHI_HIDE_GAN_WEIGHT[monthZhi] ?? []).forEach(({ gan, weight }) => {
+    const el = GAN_ELEMENT[gan];
+    if (el) elements[el] += weight * 2.5;
+  });
+
+  // 3. 年支、日支、时支藏干：原始权重，不叠加月令乘数
   [
     eightChar.getYearZhi(),
-    eightChar.getMonthZhi(),
     eightChar.getDayZhi(),
     eightChar.getTimeZhi(),
   ].forEach(zhi => {
     (ZHI_HIDE_GAN_WEIGHT[zhi] ?? []).forEach(({ gan, weight }) => {
       const el = GAN_ELEMENT[gan];
-      if (el) elements[el] += weight * getYuelingMultiplier(el, monthZhi);
+      if (el) elements[el] += weight;
     });
   });
 
-  // 3. 归一化为百分比
+  // 4. 归一化为百分比
   const total = Object.values(elements).reduce((s, v) => s + v, 0);
   const result: any = {};
   Object.entries(elements).forEach(([el, score]) => {
